@@ -1,14 +1,26 @@
 #include <MIDI.h>
 #include <JC_Button.h>
+#include <SSD1306Wire.h>
+#include <RotaryEncoder.h>
 
 const int PIN_LED = 13;
 const int PIN_START = 5;
 const int PIN_RX = 16;
 const int PIN_TX = 17;
+const int PIN_ENCODER_S1 = 19;
+const int PIN_ENCODER_S2 = 18;
 
 const uint8_t MIDI_CH = 2;
 
 Button startButton(PIN_START);
+
+// Rotary encoder
+RotaryEncoder encoder(PIN_ENCODER_S1, PIN_ENCODER_S2, RotaryEncoder::LatchMode::TWO03);
+int encoderLastPos = encoder.getPosition();
+
+// MIDI
+HardwareSerial MIDIserial(2);
+MIDI_CREATE_INSTANCE(HardwareSerial, MIDIserial, midiA);
 
 volatile int bpm = 120;
 unsigned long lastClockTime = 0;
@@ -19,11 +31,61 @@ bool isPlaying = false;
 unsigned long ledOnTime = 0;
 bool ledState = false;
 
-HardwareSerial MIDIserial(2);
-MIDI_CREATE_INSTANCE(HardwareSerial, MIDIserial, midiA);
+// OLED
+SSD1306Wire display(0x3c, SDA, SCL);
+enum MetronomePositoon
+{
+  LEFT,
+  CENTER,
+  RIGHT
+};
+MetronomePositoon metronomePosition = CENTER;
+int metronomeCount = 0;
+bool stateChanged = false;
 
-void setup() {
-  
+void drwawDisplay()
+{
+  display.clear();
+  display.setTextAlignment(TEXT_ALIGN_CENTER);
+  display.setFont(ArialMT_Plain_10);
+  display.drawString(64, 0, "DISPLAY SLOT NAME");
+  display.setFont(ArialMT_Plain_10);
+  display.drawString(94, 16, "BPM");
+  display.setFont(ArialMT_Plain_24);
+  display.drawString(94, 26, String(bpm));
+  display.setFont(ArialMT_Plain_10);
+  display.drawString(64, 54, isPlaying ? "Playing" : "Stopped");
+
+  // Metronome
+  int offsetX = -30;
+  display.drawLine(63 + offsetX, 16, 47 + offsetX, 48);
+  display.drawLine(64 + offsetX, 16, 80 + offsetX, 48);
+  display.drawLine(48 + offsetX, 49, 79 + offsetX, 49);
+
+  if (metronomePosition == LEFT)
+  {
+    display.drawLine(74 + offsetX, 22, 64 + offsetX, 43);
+    display.drawLine(75 + offsetX, 22, 65 + offsetX, 43);
+  }
+  else if (metronomePosition == CENTER)
+  {
+    display.drawLine(63 + offsetX, 18, 63 + offsetX, 40);
+    display.drawLine(64 + offsetX, 18, 64 + offsetX, 40);
+  }
+  else if (metronomePosition == RIGHT)
+  {
+    display.drawLine(54 + offsetX, 22, 64 + offsetX, 43);
+    display.drawLine(53 + offsetX, 22, 63 + offsetX, 43);
+  }
+
+  display.fillCircle(64 + offsetX, 42, 3);
+
+  display.display();
+}
+
+void setup()
+{
+
   MIDIserial.begin(31250, SERIAL_8N1, PIN_RX, PIN_TX);
   midiA.begin(MIDI_CHANNEL_OMNI);
 
@@ -31,50 +93,111 @@ void setup() {
   Serial.begin(115200);
   Serial.println("Start");
   pinMode(PIN_LED, OUTPUT);
+
+  // Initialize OLED display
+  display.init();
+  display.flipScreenVertically();
 }
 
-void loop() {
-  
+void loop()
+{
+  // Encoder.
+  encoder.tick();
+  int encoderNewPos = encoder.getPosition() * 0.5;
+  if (encoderNewPos != encoderLastPos)
+  {
+    int delta = encoderNewPos - encoderLastPos;
+    bpm += delta;
+    bpm = constrain(bpm, 40, 240);
+    encoderLastPos = encoderNewPos;
+
+    stateChanged = true;
+  }
+
   startButton.read();
-  if (startButton.wasReleased()) {
+  if (startButton.wasReleased())
+  {
     Serial.println("Pressed");
     isPlaying = !isPlaying;
-    if (isPlaying) {
+    if (isPlaying)
+    {
       midiA.sendRealTime(midi::Start);
       pulseCount = 0;
+      metronomeCount = 0;
       lastClockTime = millis();
       Serial.println("MIDI Start");
-    } else {
+    }
+    else
+    {
       midiA.sendRealTime(midi::Stop);
       pulseCount = 0;
+      metronomeCount = 0;
+      metronomePosition = CENTER;
       lastClockTime = millis();
       Serial.println("MIDI Stop");
     }
+    stateChanged = true;
   }
 
   // Send MIDI clock
-  if (isPlaying) {
+  if (isPlaying)
+  {
     unsigned long interval = 60000UL / (bpm * 24);
-    if (millis() - lastClockTime >= interval) {
+    if (millis() - lastClockTime >= interval)
+    {
       lastClockTime += interval;
       midiA.sendRealTime(midi::Clock);
 
       // Count pulse
       pulseCount++;
-      if (pulseCount >= 24) {
+      if (pulseCount >= 24)
+      {
         pulseCount = 0;
         digitalWrite(PIN_LED, HIGH);
         ledState = true;
         ledOnTime = millis();
         Serial.println("4th note");
       }
+
+      // Update metronome position
+      metronomeCount++;
+      if (metronomeCount < 12)
+      {
+        metronomePosition = LEFT;
+      }
+      else if (metronomeCount < 24)
+      {
+        metronomePosition = CENTER;
+      }
+      else if (metronomeCount < 36)
+      {
+        metronomePosition = RIGHT;
+      }
+      else if (metronomeCount < 48)
+      {
+        metronomePosition = CENTER;
+      }
+      else
+      {
+        metronomeCount = 0;
+      }
+
+      stateChanged = true;
       Serial.println(pulseCount);
     }
   }
 
   // Turn off LED
-  if (ledState && millis() - ledOnTime >= 50) {
+  if (ledState && millis() - ledOnTime >= 50)
+  {
     digitalWrite(PIN_LED, LOW);
     ledState = false;
+  }
+
+  // Update display if state changed
+  if (stateChanged)
+  {
+    drwawDisplay();
+    stateChanged = false;
   }
 }
