@@ -10,6 +10,9 @@ const int PIN_TX = 17;
 const int PIN_ENCODER_S1 = 19;
 const int PIN_ENCODER_S2 = 18;
 
+const int PIN_CV_GATE_A = 32;
+const int PIN_CV_GATE_B = 33;
+
 const uint8_t MIDI_CH = 2;
 
 Button startButton(PIN_START);
@@ -30,6 +33,11 @@ bool isPlaying = false;
 
 unsigned long ledOnTime = 0;
 bool ledState = false;
+
+bool isCvGateA = false;
+bool isCvGateB = false;
+unsigned long gateLengthMs = 0;
+unsigned long gateStartTime = 0;
 
 // OLED
 SSD1306Wire display(0x3c, SDA, SCL);
@@ -54,7 +62,11 @@ void drwawDisplay()
   display.setFont(ArialMT_Plain_24);
   display.drawString(94, 26, String(bpm));
   display.setFont(ArialMT_Plain_10);
-  display.drawString(64, 54, isPlaying ? "Playing" : "Stopped");
+  // display.drawString(64, 54, isPlaying ? "Playing" : "Stopped");
+
+  display.setTextAlignment(TEXT_ALIGN_LEFT);
+  String cvGateAText = "GATE A";
+  display.drawString(0, 54, isCvGateA ? cvGateAText + "*" : cvGateAText + "");
 
   // Metronome
   int offsetX = -30;
@@ -85,7 +97,6 @@ void drwawDisplay()
 
 void setup()
 {
-
   MIDIserial.begin(31250, SERIAL_8N1, PIN_RX, PIN_TX);
   midiA.begin(MIDI_CHANNEL_OMNI);
 
@@ -93,6 +104,10 @@ void setup()
   Serial.begin(115200);
   Serial.println("Start");
   pinMode(PIN_LED, OUTPUT);
+  pinMode(PIN_CV_GATE_A, OUTPUT);
+  pinMode(PIN_CV_GATE_B, OUTPUT);
+
+  gateLengthMs = 240 / bpm; // 16th note length in ms
 
   // Initialize OLED display
   display.init();
@@ -110,7 +125,7 @@ void loop()
     bpm += delta;
     bpm = constrain(bpm, 40, 240);
     encoderLastPos = encoderNewPos;
-
+    gateLengthMs = 240 / bpm;
     stateChanged = true;
   }
 
@@ -139,12 +154,12 @@ void loop()
     stateChanged = true;
   }
 
-  // Send MIDI clock
   if (isPlaying)
   {
     unsigned long interval = 60000UL / (bpm * 24);
     if (millis() - lastClockTime >= interval)
     {
+      // Send MIDI clock
       lastClockTime += interval;
       midiA.sendRealTime(midi::Clock);
 
@@ -159,17 +174,33 @@ void loop()
         Serial.println("4th note");
       }
 
+      // Output CV/Gate
+      if ((pulseCount % 12) == 1)
+      {
+        // if(random(2)){
+        digitalWrite(PIN_CV_GATE_A, HIGH);
+        gateStartTime = millis();
+        isCvGateA = true;
+        // };
+      }
+
+      if (isCvGateA && millis() - gateStartTime >= gateLengthMs)
+      {
+        digitalWrite(PIN_CV_GATE_A, LOW);
+        isCvGateA = false;
+      }
+
       // Update metronome position
       metronomeCount++;
-      if (metronomeCount < 12)
+      if (metronomeCount <= 12)
       {
         metronomePosition = LEFT;
       }
-      else if (metronomeCount < 24)
+      else if (metronomeCount <= 24)
       {
         metronomePosition = CENTER;
       }
-      else if (metronomeCount < 36)
+      else if (metronomeCount <= 36)
       {
         metronomePosition = RIGHT;
       }
