@@ -25,31 +25,48 @@ int encoderLastPos = encoder.getPosition();
 HardwareSerial MIDIserial(2);
 MIDI_CREATE_INSTANCE(HardwareSerial, MIDIserial, midiA);
 
-volatile int bpm = 120;
-unsigned long lastClockTime = 0;
-int pulseCount = 0;
-
 bool isPlaying = false;
+
+volatile int bpm = 120;
+unsigned long clockIntervalMicros;
+unsigned long lastClockMicros = 0;
+int clockTickCount = 0;
+
+void updateClockInterval()
+{
+  clockIntervalMicros = (60.0 * 1000000.0) / (bpm * 24.0);
+}
+
+void sendMidiClock()
+{
+  unsigned long now = micros();
+  if (now - lastClockMicros >= clockIntervalMicros)
+  {
+    lastClockMicros += clockIntervalMicros;
+    midiA.sendRealTime(midi::Clock);
+    clockTickCount++;
+  }
+}
 
 unsigned long ledOnTime = 0;
 bool ledState = false;
 
 // CV/Gate
-bool isCvGateA = false;
 unsigned long gateLengthMs = 0;
 unsigned long gateStartTime = 0;
+bool isCvGateA = false;
 
-// CV/Gate Patterns
-const char *patterns[] = {
-    "oooooooo",
-    "oooxoxoo",
-    "ooxooxox",
-    "ooxoxxoo",
-    "oxxxoxxx",
-    "oxxxxxox"};
+const int patterns[][8] = {
+    {1, 1, 1, 1, 1, 1, 1, 1}, // "oooooooo"
+    {1, 1, 1, 0, 1, 0, 1, 1}, // "oooxoxoo"
+    {1, 1, 0, 1, 1, 0, 1, 0}, // "ooxooxox"
+    {1, 1, 0, 1, 0, 0, 1, 1}, // "ooxoxxoo"
+    {1, 0, 0, 0, 1, 0, 0, 0}, // "oxxxoxxx"
+    {1, 0, 0, 0, 0, 0, 1, 0}  // "oxxxxxox"
+};
 const int NUM_PATTERNS = sizeof(patterns) / sizeof(patterns[0]);
 const int PATTERN_STEPS = 8;
-
+int lastStepTick = -1;
 int cvGateStepIndex = 0;
 int cvGateCurrentPattern = 0;
 
@@ -62,7 +79,8 @@ enum MetronomePositoon
   RIGHT
 };
 MetronomePositoon metronomePosition = CENTER;
-int metronomeCount = 0;
+unsigned int metronomePhase;
+
 bool stateChanged = false;
 
 void drwawDisplay()
@@ -80,8 +98,6 @@ void drwawDisplay()
   display.setTextAlignment(TEXT_ALIGN_LEFT);
   String cvGateAText = "CV A";
   cvGateAText += isCvGateA ? "*" : " ";
-  Serial.print("Current Mode: ");
-  Serial.println(cvGateCurrentPattern);
   if (cvGateCurrentPattern > 0)
   {
     if (cvGateCurrentPattern < NUM_PATTERNS)
@@ -126,6 +142,7 @@ void setup()
 {
   MIDIserial.begin(31250, SERIAL_8N1, PIN_RX, PIN_TX);
   midiA.begin(MIDI_CHANNEL_OMNI);
+  updateClockInterval();
 
   startButton.begin();
   Serial.begin(115200);
@@ -154,9 +171,11 @@ void loop()
     bpm = constrain(bpm, 40, 240);
     encoderLastPos = encoderNewPos;
     gateLengthMs = 240 / bpm;
+    updateClockInterval();
     stateChanged = true;
   }
 
+  // Start/Stop button
   startButton.read();
   if (startButton.wasReleased())
   {
@@ -165,18 +184,14 @@ void loop()
     if (isPlaying)
     {
       midiA.sendRealTime(midi::Start);
-      pulseCount = 0;
-      metronomeCount = 0;
-      lastClockTime = millis();
+      lastClockMicros = micros();
+      clockTickCount = 0;
       Serial.println("MIDI Start");
     }
     else
     {
       midiA.sendRealTime(midi::Stop);
-      pulseCount = 0;
-      metronomeCount = 0;
       metronomePosition = CENTER;
-      lastClockTime = millis();
       Serial.println("MIDI Stop");
     }
     stateChanged = true;
@@ -184,85 +199,71 @@ void loop()
 
   // Read CV/Gate Control Pot
   int rawValue = analogRead(PIN_CV_GATE_A_CONTROL_POT);
-  // cvGateADropProbability = (float)rawValue / 4095.0;
   cvGateCurrentPattern = map(rawValue, 0, 4095, 0, NUM_PATTERNS);
 
   if (isPlaying)
   {
-    unsigned long interval = 60000UL / (bpm * 24);
-    if (millis() - lastClockTime >= interval)
-    {
-      // Send MIDI clock
-      lastClockTime += interval;
-      midiA.sendRealTime(midi::Clock);
+    // Send MIDI clock
+    sendMidiClock();
+    
+    // Send CV/Gate
+    int currentStepTick = clockTickCount / 12; // 8th note step
+    if (currentStepTick != lastStepTick)
+    { 
+      Serial.print("Step: ");
+      Serial.print(currentStepTick);
 
-      // Count pulse
-      pulseCount++;
-      if (pulseCount >= 24)
-      {
-        pulseCount = 0;
-        digitalWrite(PIN_LED, HIGH);
-        ledState = true;
-        ledOnTime = millis();
-        // Serial.println("4th note");
-      }
+      lastStepTick = currentStepTick;
 
-      // Output CV/Gate
-      if ((pulseCount % 12) == 1)
+      if (cvGateCurrentPattern < NUM_PATTERNS)
       {
-        if (cvGateCurrentPattern < NUM_PATTERNS)
+        int stepIndex = currentStepTick % PATTERN_STEPS;
+        int gateVal = patterns[cvGateCurrentPattern][stepIndex];
+        Serial.print(gateVal ? 'o' : 'x');
+
+        if (gateVal)
         {
-          if (patterns[cvGateCurrentPattern][cvGateStepIndex] == 'o')
-          {
-            digitalWrite(PIN_CV_GATE_A, HIGH);
-            gateStartTime = millis();
-            isCvGateA = true;
-          }
+          digitalWrite(PIN_CV_GATE_A, HIGH);
+          gateStartTime = millis();
+          isCvGateA = true;
         }
-        else
-        {
-          if (random(10) == 0)
-          {
-            digitalWrite(PIN_CV_GATE_A, HIGH);
-            gateStartTime = millis();
-            isCvGateA = true;
-          }
-        }
-        cvGateStepIndex = (cvGateStepIndex + 1) % PATTERN_STEPS;
-      }
-
-      if (isCvGateA && millis() - gateStartTime >= gateLengthMs)
-      {
-        digitalWrite(PIN_CV_GATE_A, LOW);
-        isCvGateA = false;
-      }
-
-      // Update metronome position
-      metronomeCount++;
-      if (metronomeCount <= 12)
-      {
-        metronomePosition = LEFT;
-      }
-      else if (metronomeCount <= 24)
-      {
-        metronomePosition = CENTER;
-      }
-      else if (metronomeCount <= 36)
-      {
-        metronomePosition = RIGHT;
-      }
-      else if (metronomeCount < 48)
-      {
-        metronomePosition = CENTER;
       }
       else
       {
-        metronomeCount = 0;
+        if (random(10) == 0)
+        {
+          digitalWrite(PIN_CV_GATE_A, HIGH);
+          gateStartTime = millis();
+          isCvGateA = true;
+        }
       }
-
-      stateChanged = true;
-      // Serial.println(pulseCount);
     }
+
+    if (isCvGateA && millis() - gateStartTime >= gateLengthMs)
+    {
+      digitalWrite(PIN_CV_GATE_A, LOW);
+      isCvGateA = false;
+    }
+
+    // Update metronome position
+    metronomePhase = ((clockTickCount % 24) / 6);
+    switch (metronomePhase)
+    {
+    case 0:
+      metronomePosition = LEFT;
+      break;
+    case 1:
+      metronomePosition = CENTER;
+      break;
+    case 2:
+      metronomePosition = RIGHT;
+      break;
+    case 3:
+      metronomePosition = CENTER;
+      break;
+    }
+
+    stateChanged = true;
   }
 
   // Turn off LED
