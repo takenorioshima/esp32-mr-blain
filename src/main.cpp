@@ -11,7 +11,7 @@ const int PIN_ENCODER_S1 = 19;
 const int PIN_ENCODER_S2 = 18;
 
 const int PIN_CV_GATE_A = 32;
-const int PIN_CV_GATE_B = 33;
+const int PIN_CV_GATE_A_DROP_PROBABILITY = 33;
 
 const uint8_t MIDI_CH = 2;
 
@@ -35,7 +35,9 @@ unsigned long ledOnTime = 0;
 bool ledState = false;
 
 bool isCvGateA = false;
-bool isCvGateB = false;
+float prevCvGateADropProbability = 0;
+float cvGateADropProbability = 0;
+
 unsigned long gateLengthMs = 0;
 unsigned long gateStartTime = 0;
 
@@ -65,8 +67,10 @@ void drwawDisplay()
   // display.drawString(64, 54, isPlaying ? "Playing" : "Stopped");
 
   display.setTextAlignment(TEXT_ALIGN_LEFT);
-  String cvGateAText = "GATE A";
-  display.drawString(0, 54, isCvGateA ? cvGateAText + "*" : cvGateAText + "");
+  String cvGateAText = "CV A";
+  cvGateAText += isCvGateA ? "*" : " ";
+  cvGateAText += cvGateADropProbability > 0 ? " (P: " + String(cvGateADropProbability) + ")" : "";
+  display.drawString(0, 54, cvGateAText);
 
   // Metronome
   int offsetX = -30;
@@ -95,6 +99,11 @@ void drwawDisplay()
   display.display();
 }
 
+float randFloat()
+{
+  return random(0, 10000) / 10000.0;
+}
+
 void setup()
 {
   MIDIserial.begin(31250, SERIAL_8N1, PIN_RX, PIN_TX);
@@ -105,7 +114,8 @@ void setup()
   Serial.println("Start");
   pinMode(PIN_LED, OUTPUT);
   pinMode(PIN_CV_GATE_A, OUTPUT);
-  pinMode(PIN_CV_GATE_B, OUTPUT);
+  pinMode(PIN_CV_GATE_A_DROP_PROBABILITY, ANALOG);
+  analogSetAttenuation(ADC_11db);
 
   gateLengthMs = 240 / bpm; // 16th note length in ms
 
@@ -154,6 +164,10 @@ void loop()
     stateChanged = true;
   }
 
+  // Read CV/Gate A drop probability
+  int rawValue = analogRead(PIN_CV_GATE_A_DROP_PROBABILITY);
+  cvGateADropProbability = (float)rawValue / 4095.0;
+
   if (isPlaying)
   {
     unsigned long interval = 60000UL / (bpm * 24);
@@ -171,17 +185,19 @@ void loop()
         digitalWrite(PIN_LED, HIGH);
         ledState = true;
         ledOnTime = millis();
-        Serial.println("4th note");
+        // Serial.println("4th note");
       }
 
       // Output CV/Gate
       if ((pulseCount % 12) == 1)
       {
-        // if(random(2)){
-        digitalWrite(PIN_CV_GATE_A, HIGH);
-        gateStartTime = millis();
-        isCvGateA = true;
-        // };
+        if (randFloat() >= cvGateADropProbability)
+        {
+          digitalWrite(PIN_CV_GATE_A, HIGH);
+          gateStartTime = millis();
+          isCvGateA = true;
+        }
+        Serial.println(cvGateADropProbability);
       }
 
       if (isCvGateA && millis() - gateStartTime >= gateLengthMs)
@@ -214,7 +230,7 @@ void loop()
       }
 
       stateChanged = true;
-      Serial.println(pulseCount);
+      // Serial.println(pulseCount);
     }
   }
 
