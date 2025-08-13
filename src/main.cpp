@@ -11,7 +11,7 @@ const int PIN_ENCODER_S1 = 19;
 const int PIN_ENCODER_S2 = 18;
 
 const int PIN_CV_GATE_A = 32;
-const int PIN_CV_GATE_A_DROP_PROBABILITY = 33;
+const int PIN_CV_GATE_A_CONTROL_POT = 33;
 
 const uint8_t MIDI_CH = 2;
 
@@ -34,12 +34,24 @@ bool isPlaying = false;
 unsigned long ledOnTime = 0;
 bool ledState = false;
 
+// CV/Gate
 bool isCvGateA = false;
-float prevCvGateADropProbability = 0;
-float cvGateADropProbability = 0;
-
 unsigned long gateLengthMs = 0;
 unsigned long gateStartTime = 0;
+
+// CV/Gate Patterns
+const char *patterns[] = {
+    "oooooooo",
+    "oooxoxoo",
+    "ooxooxox",
+    "ooxoxxoo",
+    "oxxxoxxx",
+    "oxxxxxox"};
+const int NUM_PATTERNS = sizeof(patterns) / sizeof(patterns[0]);
+const int PATTERN_STEPS = 8;
+
+int cvGateStepIndex = 0;
+int cvGateCurrentPattern = 0;
 
 // OLED
 SSD1306Wire display(0x3c, SDA, SCL);
@@ -64,12 +76,23 @@ void drwawDisplay()
   display.setFont(ArialMT_Plain_24);
   display.drawString(94, 26, String(bpm));
   display.setFont(ArialMT_Plain_10);
-  // display.drawString(64, 54, isPlaying ? "Playing" : "Stopped");
 
   display.setTextAlignment(TEXT_ALIGN_LEFT);
   String cvGateAText = "CV A";
   cvGateAText += isCvGateA ? "*" : " ";
-  cvGateAText += cvGateADropProbability > 0 ? " (P: " + String(cvGateADropProbability) + ")" : "";
+  Serial.print("Current Mode: ");
+  Serial.println(cvGateCurrentPattern);
+  if (cvGateCurrentPattern > 0)
+  {
+    if (cvGateCurrentPattern < NUM_PATTERNS)
+    {
+      cvGateAText += "(M:" + String(cvGateCurrentPattern) + ")";
+    }
+    else
+    {
+      cvGateAText += "(M:R)";
+    }
+  }
   display.drawString(0, 54, cvGateAText);
 
   // Metronome
@@ -99,11 +122,6 @@ void drwawDisplay()
   display.display();
 }
 
-float randFloat()
-{
-  return random(0, 10000) / 10000.0;
-}
-
 void setup()
 {
   MIDIserial.begin(31250, SERIAL_8N1, PIN_RX, PIN_TX);
@@ -114,7 +132,7 @@ void setup()
   Serial.println("Start");
   pinMode(PIN_LED, OUTPUT);
   pinMode(PIN_CV_GATE_A, OUTPUT);
-  pinMode(PIN_CV_GATE_A_DROP_PROBABILITY, ANALOG);
+  pinMode(PIN_CV_GATE_A_CONTROL_POT, ANALOG);
   analogSetAttenuation(ADC_11db);
 
   gateLengthMs = 240 / bpm; // 16th note length in ms
@@ -164,9 +182,10 @@ void loop()
     stateChanged = true;
   }
 
-  // Read CV/Gate A drop probability
-  int rawValue = analogRead(PIN_CV_GATE_A_DROP_PROBABILITY);
-  cvGateADropProbability = (float)rawValue / 4095.0;
+  // Read CV/Gate Control Pot
+  int rawValue = analogRead(PIN_CV_GATE_A_CONTROL_POT);
+  // cvGateADropProbability = (float)rawValue / 4095.0;
+  cvGateCurrentPattern = map(rawValue, 0, 4095, 0, NUM_PATTERNS);
 
   if (isPlaying)
   {
@@ -191,13 +210,25 @@ void loop()
       // Output CV/Gate
       if ((pulseCount % 12) == 1)
       {
-        if (randFloat() >= cvGateADropProbability)
+        if (cvGateCurrentPattern < NUM_PATTERNS)
         {
-          digitalWrite(PIN_CV_GATE_A, HIGH);
-          gateStartTime = millis();
-          isCvGateA = true;
+          if (patterns[cvGateCurrentPattern][cvGateStepIndex] == 'o')
+          {
+            digitalWrite(PIN_CV_GATE_A, HIGH);
+            gateStartTime = millis();
+            isCvGateA = true;
+          }
         }
-        Serial.println(cvGateADropProbability);
+        else
+        {
+          if (random(10) == 0)
+          {
+            digitalWrite(PIN_CV_GATE_A, HIGH);
+            gateStartTime = millis();
+            isCvGateA = true;
+          }
+        }
+        cvGateStepIndex = (cvGateStepIndex + 1) % PATTERN_STEPS;
       }
 
       if (isCvGateA && millis() - gateStartTime >= gateLengthMs)
