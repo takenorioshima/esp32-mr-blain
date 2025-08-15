@@ -3,25 +3,26 @@
 #include <SSD1306Wire.h>
 #include <RotaryEncoder.h>
 
-const int PIN_LED = 13;
-const int PIN_START = 5;
-const int PIN_RX = 16;
-const int PIN_TX = 17;
-const int PIN_ENCODER_S1 = 19;
-const int PIN_ENCODER_S2 = 18;
-const int PIN_PROGRAM_BUTTON = 25;
+const byte PIN_LED = 13;
+const byte PIN_START = 5;
+const byte PIN_RX = 16;
+const byte PIN_TX = 17;
+const byte PIN_ENCODER_S1 = 19;
+const byte PIN_ENCODER_S2 = 18;
+const byte PIN_PROGRAM_BUTTON = 25;
 
-const int PIN_CV_GATE_A = 32;
-const int PIN_CV_GATE_A_CONTROL_POT = 33;
+const byte PIN_CV_GATE_A = 32;
+const byte PIN_CV_GATE_A_CONTROL_POT = 33;
 
-const uint8_t MIDI_CH = 2;
+const byte MIDI_CH = 2;
+const byte MIDI_PPQN = 24;
 
 Button startButton(PIN_START);
 Button programButton(PIN_PROGRAM_BUTTON);
-int programIndex = 0;
+byte programIndex = 0;
 
 const byte PROGRAM_VALUES[] = {8, 9, 10, 11};
-const int PROGRAM_COUNT = sizeof(PROGRAM_VALUES) / sizeof(PROGRAM_VALUES[0]);
+const byte PROGRAM_COUNT = sizeof(PROGRAM_VALUES) / sizeof(PROGRAM_VALUES[0]);
 
 // Rotary encoder
 RotaryEncoder encoder(PIN_ENCODER_S1, PIN_ENCODER_S2, RotaryEncoder::LatchMode::TWO03);
@@ -62,7 +63,7 @@ unsigned long gateLengthMs = 0;
 unsigned long gateStartTime = 0;
 bool isCvGateA = false;
 
-const int patterns[][8] = {
+const byte patterns[][8] = {
     {1, 1, 1, 1, 1, 1, 1, 1}, // "oooooooo"
     {1, 1, 1, 0, 1, 0, 1, 1}, // "oooxoxoo"
     {1, 1, 0, 1, 1, 0, 1, 0}, // "ooxooxox"
@@ -70,8 +71,8 @@ const int patterns[][8] = {
     {1, 0, 0, 0, 1, 0, 0, 0}, // "oxxxoxxx"
     {1, 0, 0, 0, 0, 0, 1, 0}  // "oxxxxxox"
 };
-const int NUM_PATTERNS = sizeof(patterns) / sizeof(patterns[0]);
-const int PATTERN_STEPS = 8;
+const byte NUM_PATTERNS = sizeof(patterns) / sizeof(patterns[0]);
+const byte PATTERN_STEPS = 8;
 int lastStepTick = -1;
 int cvGateStepIndex = 0;
 int cvGateCurrentPattern = 0;
@@ -95,8 +96,8 @@ void drawQuarterNoteCircle()
   {
     return;
   }
-  int tick = clockTickCount % 24;
-  if (tick % 24 < 6)
+  byte tick = clockTickCount % MIDI_PPQN;
+  if (tick % MIDI_PPQN < 6)
   {
     display.fillCircle(64, 32, 6);
   }
@@ -128,19 +129,18 @@ void drawMetronome()
   display.fillCircle(64 + offsetX, 42, 3);
 }
 
-void drawDisplay()
+void displayBpm()
 {
-  display.clear();
-
-  // BPM
   display.setTextAlignment(TEXT_ALIGN_CENTER);
   display.setFont(ArialMT_Plain_10);
   display.drawString(94, 16, "BPM");
   display.setFont(ArialMT_Plain_24);
   display.drawString(94, 26, String(bpm));
-  display.setFont(ArialMT_Plain_10);
+}
 
-  // CV/Gate
+void displayCvGateStatus()
+{
+  display.setFont(ArialMT_Plain_10);
   display.setTextAlignment(TEXT_ALIGN_LEFT);
   String cvGateAText = "CV A";
   cvGateAText += isCvGateA ? "*" : " ";
@@ -156,15 +156,70 @@ void drawDisplay()
     }
   }
   display.drawString(0, 54, cvGateAText);
+}
 
-  // Current Program
+void displayCurrentProgram()
+{
+  display.setFont(ArialMT_Plain_10);
   display.setTextAlignment(TEXT_ALIGN_CENTER);
   int slot = (PROGRAM_VALUES[programIndex] % 4) + 1; // SLOT 1-4
   display.drawString(64, 0, "BANK 2 - SLOT " + String(slot));
+}
 
+void drawDisplay()
+{
+  display.clear();
+  displayBpm();
+  displayCvGateStatus();
+  displayCurrentProgram();
   drawMetronome();
   drawQuarterNoteCircle();
   display.display();
+}
+
+void updateCvGate(){
+  if (!isPlaying) return;
+  int currentStepTick = clockTickCount / 12; // 8th note step
+  if (currentStepTick != lastStepTick)
+  {
+    // Serial.print("Step: ");
+    // Serial.println(currentStepTick);
+
+    lastStepTick = currentStepTick;
+
+    if (cvGateCurrentPattern < NUM_PATTERNS)
+    {
+      int stepIndex = currentStepTick % PATTERN_STEPS;
+      int gateVal = patterns[cvGateCurrentPattern][stepIndex];
+      Serial.print(gateVal ? 'o' : 'x');
+
+      if (gateVal)
+      {
+        digitalWrite(PIN_CV_GATE_A, HIGH);
+        gateStartTime = millis();
+        isCvGateA = true;
+      }
+    }
+    else
+    {
+      if (random(10) == 0)
+      {
+        digitalWrite(PIN_CV_GATE_A, HIGH);
+        gateStartTime = millis();
+        isCvGateA = true;
+      }
+    }
+  }
+
+  if (isCvGateA && millis() - gateStartTime >= gateLengthMs)
+  {
+    digitalWrite(PIN_CV_GATE_A, LOW);
+    Serial.println("Gate OFF");
+    Serial.print("Gate Length: ");
+    Serial.print(gateLengthMs);
+    Serial.println(" ms");
+    isCvGateA = false;
+  }
 }
 
 void setup()
@@ -185,7 +240,7 @@ void setup()
   pinMode(PIN_CV_GATE_A_CONTROL_POT, ANALOG);
   analogSetAttenuation(ADC_11db);
 
-  gateLengthMs = 240 / bpm; // 16th note length in ms
+  gateLengthMs = 60000 / (bpm * 4); // 16th note length in ms
 
   // Initialize OLED display
   display.init();
@@ -204,7 +259,7 @@ void loop()
     bpm += delta;
     bpm = constrain(bpm, 40, 240);
     encoderLastPos = encoderNewPos;
-    gateLengthMs = 240 / bpm;
+    gateLengthMs = 60000 / (bpm * 4);
     updateClockInterval();
     stateChanged = true;
   }
@@ -241,47 +296,10 @@ void loop()
     // Send MIDI clock
     sendMidiClock();
 
-    // Send CV/Gate
-    int currentStepTick = clockTickCount / 12; // 8th note step
-    if (currentStepTick != lastStepTick)
-    {
-      Serial.print("Step: ");
-      Serial.print(currentStepTick);
-
-      lastStepTick = currentStepTick;
-
-      if (cvGateCurrentPattern < NUM_PATTERNS)
-      {
-        int stepIndex = currentStepTick % PATTERN_STEPS;
-        int gateVal = patterns[cvGateCurrentPattern][stepIndex];
-        Serial.print(gateVal ? 'o' : 'x');
-
-        if (gateVal)
-        {
-          digitalWrite(PIN_CV_GATE_A, HIGH);
-          gateStartTime = millis();
-          isCvGateA = true;
-        }
-      }
-      else
-      {
-        if (random(10) == 0)
-        {
-          digitalWrite(PIN_CV_GATE_A, HIGH);
-          gateStartTime = millis();
-          isCvGateA = true;
-        }
-      }
-    }
-
-    if (isCvGateA && millis() - gateStartTime >= gateLengthMs)
-    {
-      digitalWrite(PIN_CV_GATE_A, LOW);
-      isCvGateA = false;
-    }
+    updateCvGate();
 
     // Update metronome position
-    metronomePhase = ((clockTickCount % 24) / 6);
+    metronomePhase = ((clockTickCount % MIDI_PPQN) / 6);
     switch (metronomePhase)
     {
     case 0:
