@@ -102,6 +102,32 @@ void drawQuarterNoteCircle()
   }
 }
 
+void drawMetronome()
+{
+  int offsetX = -30;
+  display.drawLine(63 + offsetX, 16, 47 + offsetX, 48);
+  display.drawLine(64 + offsetX, 16, 80 + offsetX, 48);
+  display.drawLine(48 + offsetX, 49, 79 + offsetX, 49);
+
+  if (metronomePosition == LEFT)
+  {
+    display.drawLine(74 + offsetX, 22, 64 + offsetX, 43);
+    display.drawLine(75 + offsetX, 22, 65 + offsetX, 43);
+  }
+  else if (metronomePosition == CENTER)
+  {
+    display.drawLine(63 + offsetX, 18, 63 + offsetX, 40);
+    display.drawLine(64 + offsetX, 18, 64 + offsetX, 40);
+  }
+  else if (metronomePosition == RIGHT)
+  {
+    display.drawLine(54 + offsetX, 22, 64 + offsetX, 43);
+    display.drawLine(53 + offsetX, 22, 63 + offsetX, 43);
+  }
+
+  display.fillCircle(64 + offsetX, 42, 3);
+}
+
 void drwawDisplay()
 {
   display.clear();
@@ -135,31 +161,8 @@ void drwawDisplay()
   display.setTextAlignment(TEXT_ALIGN_CENTER);
   int slot = (PROGRAM_VALUES[programIndex] % 4) + 1; // SLOT 1-4
   display.drawString(64, 0, "BANK 2 - SLOT " + String(slot));
-  
-  // Metronome
-  int offsetX = -30;
-  display.drawLine(63 + offsetX, 16, 47 + offsetX, 48);
-  display.drawLine(64 + offsetX, 16, 80 + offsetX, 48);
-  display.drawLine(48 + offsetX, 49, 79 + offsetX, 49);
 
-  if (metronomePosition == LEFT)
-  {
-    display.drawLine(74 + offsetX, 22, 64 + offsetX, 43);
-    display.drawLine(75 + offsetX, 22, 65 + offsetX, 43);
-  }
-  else if (metronomePosition == CENTER)
-  {
-    display.drawLine(63 + offsetX, 18, 63 + offsetX, 40);
-    display.drawLine(64 + offsetX, 18, 64 + offsetX, 40);
-  }
-  else if (metronomePosition == RIGHT)
-  {
-    display.drawLine(54 + offsetX, 22, 64 + offsetX, 43);
-    display.drawLine(53 + offsetX, 22, 63 + offsetX, 43);
-  }
-
-  display.fillCircle(64 + offsetX, 42, 3);
-
+  drawMetronome();
   drawQuarterNoteCircle();
   display.display();
 }
@@ -174,7 +177,7 @@ void setup()
 
   startButton.begin();
   programButton.begin();
-  
+
   Serial.begin(115200);
   Serial.println("Start");
   pinMode(PIN_LED, OUTPUT);
@@ -305,7 +308,8 @@ void loop()
     byte value = PROGRAM_VALUES[programIndex];
     midiA.sendProgramChange(value, MIDI_CH);
     programIndex++;
-    if (programIndex >= PROGRAM_COUNT) {
+    if (programIndex >= PROGRAM_COUNT)
+    {
       programIndex = 0;
     }
     stateChanged = true;
