@@ -78,13 +78,13 @@ int cvGateCurrentPattern = 0;
 
 // OLED
 SSD1306Wire display(0x3c, SDA, SCL);
-enum MetronomePositoon
+enum MetronomePositon
 {
   LEFT,
   CENTER,
   RIGHT
 };
-MetronomePositoon metronomePosition = CENTER;
+MetronomePositon metronomePosition = CENTER;
 unsigned int metronomePhase;
 
 bool stateChanged = false;
@@ -128,7 +128,7 @@ void drawMetronome()
   display.fillCircle(64 + offsetX, 42, 3);
 }
 
-void drwawDisplay()
+void drawDisplay()
 {
   display.clear();
 
@@ -190,7 +190,7 @@ void setup()
   // Initialize OLED display
   display.init();
   display.flipScreenVertically();
-  drwawDisplay();
+  drawDisplay();
 }
 
 void loop()
@@ -325,7 +325,7 @@ void loop()
   // Update display if state changed
   if (stateChanged)
   {
-    drwawDisplay();
+    drawDisplay();
     stateChanged = false;
   }
 }
