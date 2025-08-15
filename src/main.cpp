@@ -83,6 +83,19 @@ unsigned int metronomePhase;
 
 bool stateChanged = false;
 
+void drawQuarterNoteCircle()
+{
+  if (!isPlaying)
+  {
+    return;
+  }
+  int tick = clockTickCount % 24;
+  if (tick % 24 < 6)
+  {
+    display.fillCircle(64, 32, 6);
+  }
+}
+
 void drwawDisplay()
 {
   display.clear();
@@ -135,6 +148,7 @@ void drwawDisplay()
 
   display.fillCircle(64 + offsetX, 42, 3);
 
+  drawQuarterNoteCircle();
   display.display();
 }
 
