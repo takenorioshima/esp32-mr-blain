@@ -9,6 +9,7 @@ const int PIN_RX = 16;
 const int PIN_TX = 17;
 const int PIN_ENCODER_S1 = 19;
 const int PIN_ENCODER_S2 = 18;
+const int PIN_PROGRAM_BUTTON = 25;
 
 const int PIN_CV_GATE_A = 32;
 const int PIN_CV_GATE_A_CONTROL_POT = 33;
@@ -16,6 +17,11 @@ const int PIN_CV_GATE_A_CONTROL_POT = 33;
 const uint8_t MIDI_CH = 2;
 
 Button startButton(PIN_START);
+Button programButton(PIN_PROGRAM_BUTTON);
+int programIndex = 0;
+
+const byte PROGRAM_VALUES[] = {8, 9, 10, 11};
+const int PROGRAM_COUNT = sizeof(PROGRAM_VALUES) / sizeof(PROGRAM_VALUES[0]);
 
 // Rotary encoder
 RotaryEncoder encoder(PIN_ENCODER_S1, PIN_ENCODER_S2, RotaryEncoder::LatchMode::TWO03);
@@ -99,15 +105,16 @@ void drawQuarterNoteCircle()
 void drwawDisplay()
 {
   display.clear();
+
+  // BPM
   display.setTextAlignment(TEXT_ALIGN_CENTER);
-  display.setFont(ArialMT_Plain_10);
-  display.drawString(64, 0, "DISPLAY SLOT NAME");
   display.setFont(ArialMT_Plain_10);
   display.drawString(94, 16, "BPM");
   display.setFont(ArialMT_Plain_24);
   display.drawString(94, 26, String(bpm));
   display.setFont(ArialMT_Plain_10);
 
+  // CV/Gate
   display.setTextAlignment(TEXT_ALIGN_LEFT);
   String cvGateAText = "CV A";
   cvGateAText += isCvGateA ? "*" : " ";
@@ -124,6 +131,11 @@ void drwawDisplay()
   }
   display.drawString(0, 54, cvGateAText);
 
+  // Current Program
+  display.setTextAlignment(TEXT_ALIGN_CENTER);
+  int slot = (PROGRAM_VALUES[programIndex] % 4) + 1; // SLOT 1-4
+  display.drawString(64, 0, "BANK 2 - SLOT " + String(slot));
+  
   // Metronome
   int offsetX = -30;
   display.drawLine(63 + offsetX, 16, 47 + offsetX, 48);
@@ -156,9 +168,13 @@ void setup()
 {
   MIDIserial.begin(31250, SERIAL_8N1, PIN_RX, PIN_TX);
   midiA.begin(MIDI_CHANNEL_OMNI);
+
   updateClockInterval();
+  midiA.sendProgramChange(8, MIDI_CH);
 
   startButton.begin();
+  programButton.begin();
+  
   Serial.begin(115200);
   Serial.println("Start");
   pinMode(PIN_LED, OUTPUT);
@@ -171,6 +187,7 @@ void setup()
   // Initialize OLED display
   display.init();
   display.flipScreenVertically();
+  drwawDisplay();
 }
 
 void loop()
@@ -194,6 +211,7 @@ void loop()
   if (startButton.wasReleased())
   {
     Serial.println("Pressed");
+    midiA.sendControlChange(54, 2, MIDI_CH);
     isPlaying = !isPlaying;
     if (isPlaying)
     {
@@ -219,11 +237,11 @@ void loop()
   {
     // Send MIDI clock
     sendMidiClock();
-    
+
     // Send CV/Gate
     int currentStepTick = clockTickCount / 12; // 8th note step
     if (currentStepTick != lastStepTick)
-    { 
+    {
       Serial.print("Step: ");
       Serial.print(currentStepTick);
 
@@ -277,6 +295,19 @@ void loop()
       break;
     }
 
+    stateChanged = true;
+  }
+
+  // Program button
+  programButton.read();
+  if (programButton.wasReleased())
+  {
+    byte value = PROGRAM_VALUES[programIndex];
+    midiA.sendProgramChange(value, MIDI_CH);
+    programIndex++;
+    if (programIndex >= PROGRAM_COUNT) {
+      programIndex = 0;
+    }
     stateChanged = true;
   }
 
