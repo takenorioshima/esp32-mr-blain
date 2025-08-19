@@ -96,6 +96,7 @@ void sendMidiClock()
 unsigned long gateLengthMs = 0;
 unsigned long gateStartTime = 0;
 bool isCvGateA = false;
+bool isCvGateB = false;
 
 const byte patterns[][8] = {
     {1, 1, 1, 1, 1, 1, 1, 1}, // "oooooooo"
@@ -174,6 +175,7 @@ void displayBpm()
 
 void displayCvGateStatus()
 {
+  // CV/Gate A
   if (isCvGateA)
   {
     display.fillCircle(5, 60, 2);
@@ -185,18 +187,24 @@ void displayCvGateStatus()
   {
     if (currentPattern < NUM_PATTERNS)
     {
-      cvGateAText += " (P" + String(currentPattern) + ")";
+      cvGateAText += "(P" + String(currentPattern) + ")";
     }
     else
     {
-      cvGateAText += " (RND)";
+      cvGateAText += "(RND)";
     }
   }
-  display.drawString(10, 54, cvGateAText);
+  display.drawString(8, 54, cvGateAText);
 
   // CV/Gate B
+  if (isCvGateB)
+  {
+    display.fillCircle(119, 60, 2);
+  }
   display.setTextAlignment(TEXT_ALIGN_RIGHT);
-  display.drawString(128, 54, DIVISIONS[currentDivisionIndex].label);
+  String cvGateBText = "CV B";
+  cvGateBText += " (" + String(DIVISIONS[currentDivisionIndex].label) + ")";
+  display.drawString(114, 54,cvGateBText);
 }
 
 void displayCurrentProgram()
@@ -283,10 +291,12 @@ void updateCvGateB()
   if ((clockTickCount % divisionTicks) < halfCycle)
   {
     digitalWrite(PIN_CV_GATE_B, HIGH);
+    isCvGateB = true;
   }
   else
   {
     digitalWrite(PIN_CV_GATE_B, LOW);
+    isCvGateB = false;
   }
 }
 
@@ -318,6 +328,9 @@ void updateStartButton()
       // CV/Gate off
       digitalWrite(PIN_CV_GATE_A, LOW);
       isCvGateA = false;
+
+      digitalWrite(PIN_CV_GATE_B, LOW);
+      isCvGateB = false;
     }
     stateChanged = true;
   }
