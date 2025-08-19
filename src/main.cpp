@@ -10,6 +10,7 @@ const byte PIN_TX = 17;
 const byte PIN_ENCODER_S1 = 19;
 const byte PIN_ENCODER_S2 = 18;
 const byte PIN_PROGRAM_BUTTON = 25;
+const byte PIN_PROGRAM_SAVE_BUTTON = 26;
 
 const byte PIN_CV_GATE_A = 32;
 const byte PIN_POT_A = 33;
@@ -19,10 +20,14 @@ const byte MIDI_PPQN = 24;
 
 Button startButton(PIN_START);
 Button programButton(PIN_PROGRAM_BUTTON);
+Button programSaveButton(PIN_PROGRAM_SAVE_BUTTON);
 byte programIndex = 0;
 
 const byte PROGRAM_VALUES[] = {8, 9, 10, 11};
 const byte PROGRAM_COUNT = sizeof(PROGRAM_VALUES) / sizeof(PROGRAM_VALUES[0]);
+int lastProgramChangeSentMs = 0;
+int displayUpdateIntervalMS = 1000;
+bool isProgramChangeSent = false;
 
 int potAValue = 0;
 
@@ -167,6 +172,11 @@ void displayCurrentProgram()
   display.setTextAlignment(TEXT_ALIGN_CENTER);
   int slot = (PROGRAM_VALUES[programIndex] % 4) + 1; // SLOT 1-4
   display.drawString(64, 0, "BANK 2 - SLOT " + String(slot));
+  if (isProgramChangeSent)
+  {
+    display.setTextAlignment(TEXT_ALIGN_RIGHT);
+    display.drawString(128, 0, ">>");
+  }
 }
 
 void drawDisplay()
@@ -240,6 +250,7 @@ void setup()
 
   startButton.begin();
   programButton.begin();
+  programSaveButton.begin();
 
   Serial.begin(115200);
   Serial.println("Start");
@@ -343,6 +354,22 @@ void loop()
     {
       programIndex = 0;
     }
+    stateChanged = true;
+  }
+
+  // Program save button
+  programSaveButton.read();
+  if (programSaveButton.wasReleased())
+  {
+    byte value = PROGRAM_VALUES[programIndex];
+    midiA.sendProgramChange(value, MIDI_CH);
+    isProgramChangeSent = true;
+    lastProgramChangeSentMs = millis();
+    stateChanged = true;
+  }
+  if (isProgramChangeSent && millis() - lastProgramChangeSentMs >= displayUpdateIntervalMS)
+  {
+    isProgramChangeSent = false;
     stateChanged = true;
   }
 
