@@ -142,7 +142,7 @@ void drawQuarterNoteCircle()
 
 void drawMetronome()
 {
-  int offsetX = -25;
+  int offsetX = -27;
   display.drawLine(63 + offsetX, 16, 47 + offsetX, 48);
   display.drawLine(64 + offsetX, 16, 80 + offsetX, 48);
   display.drawLine(48 + offsetX, 49, 79 + offsetX, 49);
@@ -170,9 +170,9 @@ void displayBpm()
 {
   display.setTextAlignment(TEXT_ALIGN_CENTER);
   display.setFont(ArialMT_Plain_10);
-  display.drawString(91, 16, "BPM");
+  display.drawString(93, 16, "BPM");
   display.setFont(ArialMT_Plain_24);
-  display.drawString(91, 26, String(bpm));
+  display.drawString(93, 26, String(bpm));
 }
 
 void displayCvGateStatus()
@@ -367,10 +367,9 @@ void updateCvGatePots()
     potBValue = analogRead(PIN_POT_B);
     currentDivisionIndex = map(potBValue, 0, 4095, 0, NUM_DIVISIONS - 1);
     currentDivision = DIVISIONS[currentDivisionIndex].ticks;
+    
     stateChanged = true;
-
     lastAnalogReadMs = millis();
-    stateChanged = true;
   }
 }
 
@@ -492,8 +491,8 @@ void loop()
 {
   updateEncoder();
   updateStartButton();
-  updateCvGatePots();
   updateProgramButtons();
+  updateCvGatePots();
 
   if (isPlaying)
   {
