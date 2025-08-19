@@ -148,22 +148,25 @@ void displayBpm()
 
 void displayCvGateStatus()
 {
+  if (isCvGateA)
+  {
+    display.fillCircle(5, 60, 2);
+  }
   display.setFont(ArialMT_Plain_10);
   display.setTextAlignment(TEXT_ALIGN_LEFT);
   String cvGateAText = "CV A";
-  cvGateAText += isCvGateA ? "*" : " ";
   if (cvGateCurrentPattern > 0)
   {
     if (cvGateCurrentPattern < NUM_PATTERNS)
     {
-      cvGateAText += "(M:" + String(cvGateCurrentPattern) + ")";
+      cvGateAText += " (P" + String(cvGateCurrentPattern) + ")";
     }
     else
     {
-      cvGateAText += "(M:R)";
+      cvGateAText += " (RND)";
     }
   }
-  display.drawString(0, 54, cvGateAText);
+  display.drawString(10, 54, cvGateAText);
 }
 
 void displayCurrentProgram()
@@ -196,7 +199,7 @@ void updateCvGate()
   {
     return;
   }
-  
+
   int currentStepTick = clockTickCount / 12; // 8th note step
   if (currentStepTick != lastStepTick)
   {
@@ -302,6 +305,10 @@ void loop()
       midiA.sendRealTime(midi::Stop);
       metronomePosition = CENTER;
       Serial.println("MIDI Stop");
+
+      // CV/Gate off
+      digitalWrite(PIN_CV_GATE_A, LOW);
+      isCvGateA = false;
     }
     stateChanged = true;
   }
