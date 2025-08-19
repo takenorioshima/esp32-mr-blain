@@ -2,8 +2,9 @@
 #include <JC_Button.h>
 #include <SSD1306Wire.h>
 #include <RotaryEncoder.h>
+#include <jled.h>
 
-const byte PIN_LED = 13;
+const byte PIN_LED_BPM = 13;
 const byte PIN_START = 5;
 const byte PIN_RX = 16;
 const byte PIN_TX = 17;
@@ -16,6 +17,9 @@ const byte PIN_CV_GATE_A = 32;
 const byte PIN_CV_GATE_B = 2; // FIXME: Use internal blue LED to debug CV/Gate B output
 const byte PIN_POT_A = 34;
 const byte PIN_POT_B = 35;
+
+JLed ledBpm = JLed(PIN_LED_BPM);
+bool isBreathing = true;
 
 const byte MIDI_CH = 2;
 const byte MIDI_PPQN = 24;
@@ -87,9 +91,6 @@ void sendMidiClock()
     clockTickCount++;
   }
 }
-
-unsigned long ledOnTime = 0;
-bool ledState = false;
 
 // CV/Gate
 unsigned long gateLengthMs = 0;
@@ -415,6 +416,29 @@ void updateMetronome()
   stateChanged = true;
 }
 
+void updateBpmLed()
+{
+  ledBpm.Update();
+  if (isPlaying)
+  {
+    isBreathing = false;
+    if (clockTickCount % 24 == 0)
+    {
+      Serial.print("led update");  
+      ledBpm.On();
+    }
+    else
+    {
+      ledBpm.Off();
+    }
+  }
+  else if(!isBreathing)
+  {
+    ledBpm.Breathe(3000).DelayAfter(1000).Forever();
+    isBreathing = true;
+  }
+}
+
 void setup()
 {
   Serial.begin(115200);
@@ -430,7 +454,6 @@ void setup()
   programButton.begin();
   programSaveButton.begin();
 
-  pinMode(PIN_LED, OUTPUT);
   pinMode(PIN_CV_GATE_A, OUTPUT);
   pinMode(PIN_CV_GATE_B, OUTPUT);
 
@@ -441,6 +464,8 @@ void setup()
   gateLengthMs = 60000 / (bpm * 4); // 16th note length in ms
 
   currentDivisionIndex = 1; // Start with 1/8 note
+
+  ledBpm.Breathe(3000).DelayAfter(1000).Forever();
 
   // Initialize OLED display
   display.init();
@@ -463,5 +488,6 @@ void loop()
     updateMetronome();
   }
 
+  updateBpmLed();
   updateDisplay();
 }
