@@ -38,21 +38,21 @@ const unsigned long analogReadInterval = 100; // ms
 unsigned long lastAnalogReadMs = 0;
 
 // CV/Gate B - Divisions
-struct Division {
-  const char* label;
+struct Division
+{
+  const char *label;
   int ticks;
 };
 
 const Division DIVISIONS[] = {
-  {"1/16", 6},
-  {"1/8", 12},
-  {"1/4", 24},
-  {"3/8", 36},
-  {"1/2", 48},
-  {"1/1", 96},
-  {"2/1", 192},
-  {"4/1", 384}
-};
+    {"1/16", 6},
+    {"1/8", 12},
+    {"1/4", 24},
+    {"3/8", 36},
+    {"1/2", 48},
+    {"1/1", 96},
+    {"2/1", 192},
+    {"4/1", 384}};
 const int NUM_DIVISIONS = sizeof(DIVISIONS) / sizeof(DIVISIONS[0]);
 int currentDivision = 0;
 int currentDivisionIndex = 0;
@@ -222,7 +222,8 @@ void drawDisplay()
   display.display();
 }
 
-void updateDisplay(){
+void updateDisplay()
+{
   if (stateChanged)
   {
     drawDisplay();
@@ -286,12 +287,12 @@ void updateCvGateB()
   {
     digitalWrite(PIN_CV_GATE_B, LOW);
   }
-} 
+}
 
 void updateStartButton()
 {
   startButton.read();
-  if (startButton.wasReleased())
+  if (startButton.wasPressed())
   {
     Serial.println("Pressed");
 
