@@ -12,7 +12,7 @@ const byte PIN_ENCODER_S2 = 18;
 const byte PIN_PROGRAM_BUTTON = 25;
 
 const byte PIN_CV_GATE_A = 32;
-const byte PIN_CV_GATE_A_CONTROL_POT = 33;
+const byte PIN_POT_A = 33;
 
 const byte MIDI_CH = 2;
 const byte MIDI_PPQN = 24;
@@ -23,6 +23,8 @@ byte programIndex = 0;
 
 const byte PROGRAM_VALUES[] = {8, 9, 10, 11};
 const byte PROGRAM_COUNT = sizeof(PROGRAM_VALUES) / sizeof(PROGRAM_VALUES[0]);
+
+int potAValue = 0;
 
 // Rotary encoder
 RotaryEncoder encoder(PIN_ENCODER_S1, PIN_ENCODER_S2, RotaryEncoder::LatchMode::TWO03);
@@ -75,6 +77,7 @@ const byte NUM_PATTERNS = sizeof(patterns) / sizeof(patterns[0]);
 const byte PATTERN_STEPS = 8;
 int lastStepTick = -1;
 int cvGateStepIndex = 0;
+int cvGatePrevPattern = -1;
 int cvGateCurrentPattern = 0;
 
 // OLED
@@ -177,8 +180,13 @@ void drawDisplay()
   display.display();
 }
 
-void updateCvGate(){
-  if (!isPlaying) return;
+void updateCvGate()
+{
+  if (!isPlaying)
+  {
+    return;
+  }
+  
   int currentStepTick = clockTickCount / 12; // 8th note step
   if (currentStepTick != lastStepTick)
   {
@@ -237,7 +245,7 @@ void setup()
   Serial.println("Start");
   pinMode(PIN_LED, OUTPUT);
   pinMode(PIN_CV_GATE_A, OUTPUT);
-  pinMode(PIN_CV_GATE_A_CONTROL_POT, ANALOG);
+  pinMode(PIN_POT_A, ANALOG);
   analogSetAttenuation(ADC_11db);
 
   gateLengthMs = 60000 / (bpm * 4); // 16th note length in ms
@@ -288,8 +296,13 @@ void loop()
   }
 
   // Read CV/Gate Control Pot
-  int rawValue = analogRead(PIN_CV_GATE_A_CONTROL_POT);
-  cvGateCurrentPattern = map(rawValue, 0, 4095, 0, NUM_PATTERNS);
+  potAValue = analogRead(PIN_POT_A);
+  cvGateCurrentPattern = map(potAValue, 0, 4095, 0, NUM_PATTERNS);
+  if (cvGateCurrentPattern != cvGatePrevPattern)
+  {
+    cvGatePrevPattern = cvGateCurrentPattern;
+    stateChanged = true;
+  }
 
   if (isPlaying)
   {
