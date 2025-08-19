@@ -53,10 +53,11 @@ const Division DIVISIONS[] = {
     {"1/8", 12},
     {"1/4", 24},
     {"3/8", 36},
-    {"1/2", 48},
-    {"1/1", 96},
-    {"2/1", 192},
-    {"4/1", 384}};
+    {"2/4", 48},
+    {"1Bar", 96},
+    {"2Bars", 192},
+    {"4Bars", 384}
+};
 const int NUM_DIVISIONS = sizeof(DIVISIONS) / sizeof(DIVISIONS[0]);
 int currentDivision = 0;
 int currentDivisionIndex = 0;
