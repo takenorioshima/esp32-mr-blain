@@ -134,13 +134,14 @@ void drawQuarterNoteCircle()
   byte tick = clockTickCount % MIDI_PPQN;
   if (tick % MIDI_PPQN < 6)
   {
-    display.fillCircle(64, 32, 6);
+    int radius = 8 - tick % MIDI_PPQN;
+    display.fillCircle(64, 32, radius);
   }
 }
 
 void drawMetronome()
 {
-  int offsetX = -30;
+  int offsetX = -25;
   display.drawLine(63 + offsetX, 16, 47 + offsetX, 48);
   display.drawLine(64 + offsetX, 16, 80 + offsetX, 48);
   display.drawLine(48 + offsetX, 49, 79 + offsetX, 49);
@@ -168,9 +169,9 @@ void displayBpm()
 {
   display.setTextAlignment(TEXT_ALIGN_CENTER);
   display.setFont(ArialMT_Plain_10);
-  display.drawString(94, 16, "BPM");
+  display.drawString(91, 16, "BPM");
   display.setFont(ArialMT_Plain_24);
-  display.drawString(94, 26, String(bpm));
+  display.drawString(91, 26, String(bpm));
 }
 
 void displayCvGateStatus()
@@ -199,12 +200,12 @@ void displayCvGateStatus()
   // CV/Gate B
   if (isCvGateB)
   {
-    display.fillCircle(119, 60, 2);
+    display.fillCircle(126, 60, 2);
   }
   display.setTextAlignment(TEXT_ALIGN_RIGHT);
   String cvGateBText = "CV B";
   cvGateBText += " (" + String(DIVISIONS[currentDivisionIndex].label) + ")";
-  display.drawString(114, 54,cvGateBText);
+  display.drawString(121, 54,cvGateBText);
 }
 
 void displayCurrentProgram()
