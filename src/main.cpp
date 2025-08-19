@@ -13,7 +13,7 @@ const byte PIN_PROGRAM_BUTTON = 25;
 const byte PIN_PROGRAM_SAVE_BUTTON = 26;
 
 const byte PIN_CV_GATE_A = 32;
-const byte PIN_CV_GATE_B = 33;
+const byte PIN_CV_GATE_B = 2; // FIXME: Use internal blue LED to debug CV/Gate B output
 const byte PIN_POT_A = 34;
 const byte PIN_POT_B = 35;
 
@@ -38,30 +38,24 @@ const unsigned long analogReadInterval = 100; // ms
 unsigned long lastAnalogReadMs = 0;
 
 // CV/Gate B - Divisions
-const char* DIVISION_LABELS[] = {
-  "1/16",  // = 6 PPQN
-  "1/8",   // = 12 PPQN
-  "1/4",   // = 24 PPQN
-  "3/8",   // = 36 PPQN
-  "1/2",   // = 48 PPQN
-  "1/1",   // = 96 PPQN
-  "2/1",   // = 192 PPQN
-  "4/1"    // = 384 PPQN
+struct Division {
+  const char* label;
+  int ticks;
 };
-const int DIVISIONS[] = {
-  6,  // 1/16
-  12,  // 1/8
-  24,  // 1/4
-  36,  // 3/8
-  48,  // 1/2
-  96,  // 1/1
-  192, // 2/1
-  384  // 4/1
+
+const Division DIVISIONS[] = {
+  {"1/16", 6},
+  {"1/8", 12},
+  {"1/4", 24},
+  {"3/8", 36},
+  {"1/2", 48},
+  {"1/1", 96},
+  {"2/1", 192},
+  {"4/1", 384}
 };
 const int NUM_DIVISIONS = sizeof(DIVISIONS) / sizeof(DIVISIONS[0]);
 int currentDivision = 0;
 int currentDivisionIndex = 0;
-
 
 // Rotary encoder
 RotaryEncoder encoder(PIN_ENCODER_S1, PIN_ENCODER_S2, RotaryEncoder::LatchMode::TWO03);
@@ -113,9 +107,8 @@ const byte patterns[][8] = {
 const byte NUM_PATTERNS = sizeof(patterns) / sizeof(patterns[0]);
 const byte PATTERN_STEPS = 8;
 int lastStepTick = -1;
-int cvGateStepIndex = 0;
-int cvGatePrevPattern = -1;
-int cvGateCurrentPattern = 0;
+int stepIndex = 0;
+int currentPattern = 0;
 
 // OLED
 SSD1306Wire display(0x3c, SDA, SCL);
@@ -187,11 +180,11 @@ void displayCvGateStatus()
   display.setFont(ArialMT_Plain_10);
   display.setTextAlignment(TEXT_ALIGN_LEFT);
   String cvGateAText = "CV A";
-  if (cvGateCurrentPattern > 0)
+  if (currentPattern > 0)
   {
-    if (cvGateCurrentPattern < NUM_PATTERNS)
+    if (currentPattern < NUM_PATTERNS)
     {
-      cvGateAText += " (P" + String(cvGateCurrentPattern) + ")";
+      cvGateAText += " (P" + String(currentPattern) + ")";
     }
     else
     {
@@ -202,7 +195,7 @@ void displayCvGateStatus()
 
   // CV/Gate B
   display.setTextAlignment(TEXT_ALIGN_RIGHT);
-  display.drawString(128, 54, DIVISION_LABELS[currentDivisionIndex]);
+  display.drawString(128, 54, DIVISIONS[currentDivisionIndex].label);
 }
 
 void displayCurrentProgram()
@@ -229,23 +222,26 @@ void drawDisplay()
   display.display();
 }
 
-void updateCvGate()
-{
-  if (!isPlaying)
+void updateDisplay(){
+  if (stateChanged)
   {
-    return;
+    drawDisplay();
+    stateChanged = false;
   }
+}
 
+void updateCvGateA()
+{
   // CV/Gaate A - Pattern based gate
   int currentStepTick = clockTickCount / 12; // 8th note step
   if (currentStepTick != lastStepTick)
   {
     lastStepTick = currentStepTick;
 
-    if (cvGateCurrentPattern < NUM_PATTERNS)
+    if (currentPattern < NUM_PATTERNS)
     {
       int stepIndex = currentStepTick % PATTERN_STEPS;
-      int gateVal = patterns[cvGateCurrentPattern][stepIndex];
+      int gateVal = patterns[currentPattern][stepIndex];
       Serial.print(gateVal ? 'o' : 'x');
 
       if (gateVal)
@@ -265,7 +261,6 @@ void updateCvGate()
       }
     }
   }
-
   if (isCvGateA && millis() - gateStartTime >= gateLengthMs)
   {
     digitalWrite(PIN_CV_GATE_A, LOW);
@@ -275,72 +270,35 @@ void updateCvGate()
     Serial.println(" ms");
     isCvGateA = false;
   }
+}
 
+void updateCvGateB()
+{
   // CV/Gate B - Division based gate
   int divisionTicks = currentDivision;
   int halfCycle = divisionTicks / 2;
 
-  if ((clockTickCount % divisionTicks) < halfCycle) {
-    digitalWrite(2, HIGH);
-  } else {
-    digitalWrite(2, LOW);
-  }
-}
-
-void setup()
-{
-  MIDIserial.begin(31250, SERIAL_8N1, PIN_RX, PIN_TX);
-  midiA.begin(MIDI_CHANNEL_OMNI);
-
-  updateClockInterval();
-  midiA.sendProgramChange(8, MIDI_CH);
-
-  startButton.begin();
-  programButton.begin();
-  programSaveButton.begin();
-
-  Serial.begin(115200);
-  Serial.println("Start");
-  pinMode(PIN_LED, OUTPUT);
-  pinMode(PIN_CV_GATE_A, OUTPUT);
-  pinMode(PIN_CV_GATE_B, OUTPUT);
-  pinMode(PIN_POT_A, ANALOG);
-  pinMode(PIN_POT_B, ANALOG);
-  pinMode(2, OUTPUT); // CV/Gate B output
-  analogSetAttenuation(ADC_11db);
-
-  gateLengthMs = 60000 / (bpm * 4); // 16th note length in ms
-
-  currentDivision = DIVISIONS[1]; // Start with 1/8 note
-
-  // Initialize OLED display
-  display.init();
-  display.flipScreenVertically();
-  drawDisplay();
-}
-
-void loop()
-{
-  // Encoder.
-  encoder.tick();
-  int encoderNewPos = encoder.getPosition() * 0.5;
-  if (encoderNewPos != encoderLastPos)
+  if ((clockTickCount % divisionTicks) < halfCycle)
   {
-    int delta = encoderNewPos - encoderLastPos;
-    bpm += delta;
-    bpm = constrain(bpm, 40, 240);
-    encoderLastPos = encoderNewPos;
-    gateLengthMs = 60000 / (bpm * 4);
-    updateClockInterval();
-    stateChanged = true;
+    digitalWrite(PIN_CV_GATE_B, HIGH);
   }
+  else
+  {
+    digitalWrite(PIN_CV_GATE_B, LOW);
+  }
+} 
 
-  // Start/Stop button
+void updateStartButton()
+{
   startButton.read();
   if (startButton.wasReleased())
   {
     Serial.println("Pressed");
+
+    // Set note division to 1/4.
+    // Ref: https://blooper.chasebliss.com/midi/docs/midi-manual.pdf
     midiA.sendControlChange(54, 3, MIDI_CH);
+
     isPlaying = !isPlaying;
     if (isPlaying)
     {
@@ -361,57 +319,47 @@ void loop()
     }
     stateChanged = true;
   }
+}
 
-  // Read CV/Gate Control Pot
-  if( millis() - lastAnalogReadMs >= analogReadInterval )
+void updateEncoder()
+{
+  encoder.tick();
+  int encoderNewPos = encoder.getPosition() * 0.5;
+  if (encoderNewPos != encoderLastPos)
   {
-    // Read pot A to set CV/Gate pattern
-    potAValue = analogRead(PIN_POT_A);
-    cvGateCurrentPattern = map(potAValue, 0, 4095, 0, NUM_PATTERNS);
-    if (cvGateCurrentPattern != cvGatePrevPattern)
-    {
-      cvGatePrevPattern = cvGateCurrentPattern;
-      stateChanged = true;
-    }
+    int delta = encoderNewPos - encoderLastPos;
+    bpm += delta;
+    bpm = constrain(bpm, 40, 240);
+    encoderLastPos = encoderNewPos;
+    gateLengthMs = 60000 / (bpm * 4);
+    updateClockInterval();
+    stateChanged = true;
+  }
+}
 
-    // Read pot B to set divisions
+void updateCvGatePots()
+{
+  // Read CV/Gate Control Pot
+  if (millis() - lastAnalogReadMs >= analogReadInterval)
+  {
+    // Read pot A - Set CV/Gate pattern
+    potAValue = analogRead(PIN_POT_A);
+    currentPattern = map(potAValue, 0, 4095, 0, NUM_PATTERNS);
+
+    // Read pot B - Set divisions
     potBValue = analogRead(PIN_POT_B);
     currentDivisionIndex = map(potBValue, 0, 4095, 0, NUM_DIVISIONS - 1);
-    currentDivision = DIVISIONS[currentDivisionIndex];
+    currentDivision = DIVISIONS[currentDivisionIndex].ticks;
     stateChanged = true;
 
     lastAnalogReadMs = millis();
-  }
-  
-  if (isPlaying)
-  {
-    // Send MIDI clock
-    sendMidiClock();
-
-    updateCvGate();
-
-    // Update metronome position
-    metronomePhase = ((clockTickCount % MIDI_PPQN) / 6);
-    switch (metronomePhase)
-    {
-    case 0:
-      metronomePosition = LEFT;
-      break;
-    case 1:
-      metronomePosition = CENTER;
-      break;
-    case 2:
-      metronomePosition = RIGHT;
-      break;
-    case 3:
-      metronomePosition = CENTER;
-      break;
-    }
-
     stateChanged = true;
   }
+}
 
-  // Program button
+void updateProgramButtons()
+{
+  // Program change button
   programButton.read();
   if (programButton.wasReleased())
   {
@@ -440,18 +388,79 @@ void loop()
     isProgramChangeSent = false;
     stateChanged = true;
   }
+}
 
-  // Turn off LED
-  if (ledState && millis() - ledOnTime >= 50)
+void updateMetronome()
+{
+  // Update metronome position
+  metronomePhase = ((clockTickCount % MIDI_PPQN) / 6);
+
+  switch (metronomePhase)
   {
-    digitalWrite(PIN_LED, LOW);
-    ledState = false;
+  case 0:
+    metronomePosition = LEFT;
+    break;
+  case 1:
+    metronomePosition = CENTER;
+    break;
+  case 2:
+    metronomePosition = RIGHT;
+    break;
+  case 3:
+    metronomePosition = CENTER;
+    break;
   }
 
-  // Update display if state changed
-  if (stateChanged)
+  stateChanged = true;
+}
+
+void setup()
+{
+  Serial.begin(115200);
+  Serial.println("Start");
+
+  MIDIserial.begin(31250, SERIAL_8N1, PIN_RX, PIN_TX);
+  midiA.begin(MIDI_CHANNEL_OMNI);
+
+  updateClockInterval();
+  midiA.sendProgramChange(8, MIDI_CH); // Set initial program - Bank 2, Slot 1
+
+  startButton.begin();
+  programButton.begin();
+  programSaveButton.begin();
+
+  pinMode(PIN_LED, OUTPUT);
+  pinMode(PIN_CV_GATE_A, OUTPUT);
+  pinMode(PIN_CV_GATE_B, OUTPUT);
+
+  pinMode(PIN_POT_A, ANALOG);
+  pinMode(PIN_POT_B, ANALOG);
+  analogSetAttenuation(ADC_11db);
+
+  gateLengthMs = 60000 / (bpm * 4); // 16th note length in ms
+
+  currentDivisionIndex = 1; // Start with 1/8 note
+
+  // Initialize OLED display
+  display.init();
+  display.flipScreenVertically();
+  drawDisplay();
+}
+
+void loop()
+{
+  updateEncoder();
+  updateStartButton();
+  updateCvGatePots();
+  updateProgramButtons();
+
+  if (isPlaying)
   {
-    drawDisplay();
-    stateChanged = false;
+    sendMidiClock();
+    updateCvGateA();
+    updateCvGateB();
+    updateMetronome();
   }
+
+  updateDisplay();
 }
