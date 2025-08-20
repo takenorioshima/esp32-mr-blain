@@ -56,8 +56,7 @@ const Division DIVISIONS[] = {
     {"2/4", 48},
     {"1Bar", 96},
     {"2Bars", 192},
-    {"4Bars", 384}
-};
+    {"4Bars", 384}};
 const int NUM_DIVISIONS = sizeof(DIVISIONS) / sizeof(DIVISIONS[0]);
 int currentDivision = 0;
 int currentDivisionIndex = 0;
@@ -206,7 +205,7 @@ void displayCvGateStatus()
   display.setTextAlignment(TEXT_ALIGN_RIGHT);
   String cvGateBText = "CV B";
   cvGateBText += " (" + String(DIVISIONS[currentDivisionIndex].label) + ")";
-  display.drawString(121, 54,cvGateBText);
+  display.drawString(121, 54, cvGateBText);
 }
 
 void displayCurrentProgram()
@@ -367,7 +366,7 @@ void updateCvGatePots()
     potBValue = analogRead(PIN_POT_B);
     currentDivisionIndex = map(potBValue, 0, 4095, 0, NUM_DIVISIONS - 1);
     currentDivision = DIVISIONS[currentDivisionIndex].ticks;
-    
+
     stateChanged = true;
     lastAnalogReadMs = millis();
   }
@@ -438,7 +437,7 @@ void updateBpmLed()
     isBreathing = false;
     if (clockTickCount % 24 == 0)
     {
-      Serial.print("led update");  
+      Serial.print("led update");
       ledBpm.On();
     }
     else
@@ -446,7 +445,7 @@ void updateBpmLed()
       ledBpm.Off();
     }
   }
-  else if(!isBreathing)
+  else if (!isBreathing)
   {
     ledBpm.Breathe(3000).DelayAfter(1000).Forever();
     isBreathing = true;
