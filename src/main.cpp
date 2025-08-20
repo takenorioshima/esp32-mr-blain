@@ -409,7 +409,7 @@ void updateProgramButtons()
 void updateMetronome()
 {
   // Update metronome position
-  metronomePhase = ((clockTickCount % MIDI_PPQN) / 6);
+  metronomePhase = ((clockTickCount % (MIDI_PPQN * 2)) / 12);
 
   switch (metronomePhase)
   {
