@@ -125,16 +125,16 @@ unsigned int metronomePhase;
 
 bool stateChanged = false;
 
-void drawQuarterNoteCircle()
+void drawDownbeatCircle()
 {
   if (!isPlaying)
   {
     return;
   }
-  byte tick = clockTickCount % MIDI_PPQN;
-  if (tick % MIDI_PPQN < 6)
+
+  if (clockTickCount % (MIDI_PPQN * 4) < 6)
   {
-    int radius = 8 - tick % MIDI_PPQN;
+    int radius = 8 - clockTickCount % MIDI_PPQN;
     display.fillCircle(64, 32, radius);
   }
 }
@@ -228,7 +228,7 @@ void drawDisplay()
   displayCvGateStatus();
   displayCurrentProgram();
   drawMetronome();
-  drawQuarterNoteCircle();
+  drawDownbeatCircle();
   display.display();
 }
 
