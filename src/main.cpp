@@ -114,13 +114,13 @@ int currentPattern = 0;
 
 // OLED
 SSD1306Wire display(0x3c, SDA, SCL);
-enum MetronomePositon
+enum MetronomePosition
 {
   LEFT,
   CENTER,
   RIGHT
 };
-MetronomePositon metronomePosition = CENTER;
+MetronomePosition metronomePosition = CENTER;
 unsigned int metronomePhase;
 
 bool stateChanged = false;
