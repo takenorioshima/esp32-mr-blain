@@ -11,7 +11,6 @@ const byte PIN_TX = 17;
 const byte PIN_ENCODER_S1 = 19;
 const byte PIN_ENCODER_S2 = 18;
 const byte PIN_PROGRAM_BUTTON = 25;
-const byte PIN_PROGRAM_SAVE_BUTTON = 26;
 
 const byte PIN_CV_GATE_A = 32;
 const byte PIN_CV_GATE_B = 2; // FIXME: Use internal blue LED to debug CV/Gate B output
@@ -26,7 +25,6 @@ const byte MIDI_PPQN = 24;
 
 Button startButton(PIN_START);
 Button programButton(PIN_PROGRAM_BUTTON);
-Button programSaveButton(PIN_PROGRAM_SAVE_BUTTON);
 
 byte programIndex = 0;
 const byte PROGRAM_VALUES[] = {8, 9, 10, 11};
@@ -34,6 +32,8 @@ const byte PROGRAM_COUNT = sizeof(PROGRAM_VALUES) / sizeof(PROGRAM_VALUES[0]);
 int lastProgramChangeSentMs = 0;
 int displayUpdateIntervalMS = 1000;
 bool isProgramChangeSent = false;
+bool isProgramButtonLongPressed = false;
+unsigned long programButtonLastPressed = 0;
 
 int potAValue = 0;
 int potBValue = 0;
@@ -378,8 +378,15 @@ void updateProgramButtons()
   programButton.read();
   if (programButton.wasReleased())
   {
-    byte value = PROGRAM_VALUES[programIndex];
-    midiA.sendProgramChange(value, MIDI_CH);
+    if (isProgramButtonLongPressed)
+    {
+      // Ignore release event after long press
+      isProgramButtonLongPressed = false;
+      return;
+    }
+
+    // Send program change and move to next program
+    midiA.sendProgramChange(PROGRAM_VALUES[programIndex], MIDI_CH);
     programIndex++;
     if (programIndex >= PROGRAM_COUNT)
     {
@@ -388,16 +395,26 @@ void updateProgramButtons()
     stateChanged = true;
   }
 
-  // Program save button
-  programSaveButton.read();
-  if (programSaveButton.wasReleased())
+  // Long press detection
+  if (programButton.wasPressed())
   {
-    byte value = PROGRAM_VALUES[programIndex];
-    midiA.sendProgramChange(value, MIDI_CH);
-    isProgramChangeSent = true;
-    lastProgramChangeSentMs = millis();
-    stateChanged = true;
+    Serial.println("Program button pressed");
+    programButtonLastPressed = millis();
   }
+
+  if (!isProgramButtonLongPressed)
+  {
+    if (programButton.isPressed() && (millis() - programButtonLastPressed > 500))
+    {
+      Serial.println("Long Press");
+      // Send program change for the current program to save slot
+      midiA.sendProgramChange(PROGRAM_VALUES[programIndex], MIDI_CH);
+      lastProgramChangeSentMs = millis();
+      isProgramButtonLongPressed = true;
+      isProgramChangeSent = true;
+      stateChanged = true;
+    }
+  };
   if (isProgramChangeSent && millis() - lastProgramChangeSentMs >= displayUpdateIntervalMS)
   {
     isProgramChangeSent = false;
