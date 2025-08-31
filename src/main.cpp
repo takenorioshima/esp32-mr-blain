@@ -25,6 +25,7 @@ const byte MIDI_PPQN = 24;
 
 Button startButton(PIN_START);
 Button programButton(PIN_PROGRAM_BUTTON);
+Button encoderButton(PIN_ENCODER_BUTTON);
 
 byte programIndex = 0;
 const byte PROGRAM_VALUES[] = {8, 9, 10, 11};
@@ -55,6 +56,20 @@ volatile int bpm = 120;
 unsigned long clockIntervalMicros;
 unsigned long lastClockMicros = 0;
 int clockTickCount = 0;
+
+// Quantize
+struct Quantize {
+  const char *label;
+  uint8_t value;
+};
+Quantize quantizes[] = {
+  // Ref: https://blooper.chasebliss.com/midi/docs/midi-manual.pdf
+  {"4/4", 0},  // CC#54 value=0 = Whole 
+  {"1/4", 3},  // CC#54 value=3 = Qurter Note
+  {"1/8", 4},  // CC#54 value=3 = Eighth Note
+};
+const int NUM_QUANTIZES = sizeof(quantizes) / sizeof(quantizes[0]);
+int currentQuantize = 0;
 
 void updateClockInterval()
 {
@@ -142,7 +157,7 @@ void drawDownbeatCircle()
 
 void drawMetronome()
 {
-  int offsetX = -27;
+  int offsetX = -32;
   display.drawLine(63 + offsetX, 16, 47 + offsetX, 48);
   display.drawLine(64 + offsetX, 16, 80 + offsetX, 48);
   display.drawLine(48 + offsetX, 49, 79 + offsetX, 49);
@@ -170,9 +185,9 @@ void displayBpm()
 {
   display.setTextAlignment(TEXT_ALIGN_CENTER);
   display.setFont(ArialMT_Plain_10);
-  display.drawString(93, 16, "BPM");
+  display.drawString(98, 16, "BPM");
   display.setFont(ArialMT_Plain_24);
-  display.drawString(93, 26, String(bpm));
+  display.drawString(98, 26, String(bpm));
 }
 
 void displayCvGateStatus()
@@ -209,6 +224,13 @@ void displayCvGateStatus()
   display.drawString(121, 54, cvGateBText);
 }
 
+void displayQuantize()
+{
+  display.setFont(ArialMT_Plain_10);
+  display.setTextAlignment(TEXT_ALIGN_CENTER);
+  display.drawString(64, 16, "Q " + String(quantizes[currentQuantize].label));
+}
+
 void displayCurrentProgram()
 {
   display.setFont(ArialMT_Plain_10);
@@ -229,6 +251,7 @@ void drawDisplay()
   displayCvGateStatus();
   displayCurrentProgram();
   drawMetronome();
+  displayQuantize();
   drawDownbeatCircle();
   display.display();
 }
@@ -357,7 +380,21 @@ void updateEncoder()
     encoderLastPos = encoderNewPos;
     gateLengthMs = 60000 / (bpm * 4);
     updateClockInterval();
-    stateChanged = true;
+  }
+}
+
+void updateEncoderButton()
+{
+  encoderButton.read();
+  if (encoderButton.wasPressed())
+  { 
+    currentQuantize++;
+    if (currentQuantize >= NUM_QUANTIZES)
+    {
+      currentQuantize = 0;
+    }
+    Serial.print("Encoder Button Pressed: ");
+    Serial.println(quantizes[currentQuantize].label);
   }
 }
 
@@ -492,7 +529,7 @@ void setup()
 
   startButton.begin();
   programButton.begin();
-  programSaveButton.begin();
+  encoderButton.begin();
 
   pinMode(PIN_CV_GATE_A, OUTPUT);
   pinMode(PIN_CV_GATE_B, OUTPUT);
@@ -519,6 +556,7 @@ void setup()
 void loop()
 {
   updateEncoder();
+  updateEncoderButton();
   updateStartButton();
   updateProgramButtons();
   updateCvGatePots();
