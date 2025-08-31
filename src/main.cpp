@@ -8,12 +8,13 @@ const byte PIN_LED_BPM = 13;
 const byte PIN_START = 5;
 const byte PIN_RX = 16;
 const byte PIN_TX = 17;
-const byte PIN_ENCODER_S1 = 19;
-const byte PIN_ENCODER_S2 = 18;
+const byte PIN_ENCODER_S1 = 18;
+const byte PIN_ENCODER_S2 = 19;
+const byte PIN_ENCODER_BUTTON = 26;
 const byte PIN_PROGRAM_BUTTON = 25;
 
 const byte PIN_CV_GATE_A = 32;
-const byte PIN_CV_GATE_B = 2; // FIXME: Use internal blue LED to debug CV/Gate B output
+const byte PIN_CV_GATE_B = 33;
 const byte PIN_POT_A = 34;
 const byte PIN_POT_B = 35;
 
@@ -52,7 +53,7 @@ MIDI_CREATE_INSTANCE(HardwareSerial, MIDIserial, midiA);
 
 bool isPlaying = false;
 
-volatile int bpm = 120;
+volatile int bpm = 110;
 unsigned long clockIntervalMicros;
 unsigned long lastClockMicros = 0;
 int clockTickCount = 0;
