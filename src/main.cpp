@@ -155,7 +155,7 @@ void drawDownbeatCircle()
   if (clockTickCount % (MIDI_PPQN * 4) < 6)
   {
     int radius = 8 - clockTickCount % MIDI_PPQN;
-    display.fillCircle(64, 32, radius);
+    display.fillCircle(64, 38, radius);
   }
 }
 
