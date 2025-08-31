@@ -340,11 +340,7 @@ void updateStartButton()
   if (startButton.wasPressed())
   {
     Serial.println("Pressed");
-
-    // Set note division to 1/4.
-    // Ref: https://blooper.chasebliss.com/midi/docs/midi-manual.pdf
-    midiA.sendControlChange(54, 3, MIDI_CH);
-
+    
     isPlaying = !isPlaying;
     if (isPlaying)
     {
