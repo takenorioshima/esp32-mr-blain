@@ -131,6 +131,9 @@ int currentDivisionIndex = 0;
 
 // OLED
 SSD1306Wire display(0x3c, SDA, SCL);
+unsigned long oledLastUpdatedAt = 0;
+const unsigned long oledUpdateInterval = 1000 / 30; // = 30Hz.
+
 enum MetronomePosition
 {
   LEFT,
@@ -258,11 +261,12 @@ void drawDisplay()
 
 void updateDisplay()
 {
-  if (stateChanged)
-  {
-    drawDisplay();
-    stateChanged = false;
+  unsigned long now = millis();
+  if( now - oledLastUpdatedAt < oledUpdateInterval){
+    return;
   }
+  drawDisplay();
+  oledLastUpdatedAt = now;
 }
 
 void setGate(uint8_t pin, uint8_t state) {
@@ -364,7 +368,6 @@ void updateStartButton()
       setGate(PIN_CV_GATE_B, LOW);
       isCvGateB = false;
     }
-    stateChanged = true;
   }
 }
 
@@ -412,7 +415,6 @@ void updateCvGatePots()
     currentDivisionIndex = map(potBValue, 0, 4095, 0, NUM_DIVISIONS - 1);
     currentDivision = DIVISIONS[currentDivisionIndex].ticks;
 
-    stateChanged = true;
     lastAnalogReadMs = millis();
   }
 }
@@ -437,7 +439,6 @@ void updateProgramButtons()
     {
       programIndex = 0;
     }
-    stateChanged = true;
   }
 
   // Long press detection
@@ -457,13 +458,11 @@ void updateProgramButtons()
       lastProgramChangeSentMs = millis();
       isProgramButtonLongPressed = true;
       isProgramChangeSent = true;
-      stateChanged = true;
     }
   };
   if (isProgramChangeSent && millis() - lastProgramChangeSentMs >= displayUpdateIntervalMS)
   {
     isProgramChangeSent = false;
-    stateChanged = true;
   }
 }
 
