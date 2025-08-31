@@ -123,9 +123,8 @@ enum MetronomePosition
   RIGHT
 };
 MetronomePosition metronomePosition = CENTER;
-unsigned int metronomePhase;
-
-bool stateChanged = false;
+unsigned int metronomePhase = 0;
+unsigned int lastMetronomePhase =-1;
 
 void drawDownbeatCircle()
 {
@@ -331,6 +330,8 @@ void updateStartButton()
     {
       midiA.sendRealTime(midi::Stop);
       metronomePosition = CENTER;
+      metronomePhase = 0;
+      lastMetronomePhase = -1;
       Serial.println("MIDI Stop");
 
       // CV/Gate off
@@ -433,6 +434,9 @@ void updateMetronome()
 {
   // Update metronome position
   metronomePhase = ((clockTickCount % (MIDI_PPQN * 2)) / 12);
+  if(metronomePhase == lastMetronomePhase) {
+    return;
+  }
 
   switch (metronomePhase)
   {
@@ -450,7 +454,7 @@ void updateMetronome()
     break;
   }
 
-  stateChanged = true;
+  lastMetronomePhase = metronomePhase;
 }
 
 void updateBpmLed()
