@@ -41,26 +41,6 @@ int potBValue = 0;
 const unsigned long analogReadInterval = 100; // ms
 unsigned long lastAnalogReadMs = 0;
 
-// CV/Gate B - Divisions
-struct Division
-{
-  const char *label;
-  int ticks;
-};
-
-const Division DIVISIONS[] = {
-    {"1/16", 6},
-    {"1/8", 12},
-    {"1/4", 24},
-    {"3/8", 36},
-    {"2/4", 48},
-    {"1Bar", 96},
-    {"2Bars", 192},
-    {"4Bars", 384}};
-const int NUM_DIVISIONS = sizeof(DIVISIONS) / sizeof(DIVISIONS[0]);
-int currentDivision = 0;
-int currentDivisionIndex = 0;
-
 // Rotary encoder
 RotaryEncoder encoder(PIN_ENCODER_S1, PIN_ENCODER_S2, RotaryEncoder::LatchMode::TWO03);
 int encoderLastPos = encoder.getPosition();
@@ -92,11 +72,10 @@ void sendMidiClock()
   }
 }
 
-// CV/Gate
+// CV/Gate A - Pattern based gate
 unsigned long gateLengthMs = 0;
 unsigned long gateStartTime = 0;
 bool isCvGateA = false;
-bool isCvGateB = false;
 
 const byte patterns[][8] = {
     {1, 1, 1, 1, 1, 1, 1, 1}, // "oooooooo"
@@ -111,6 +90,29 @@ const byte PATTERN_STEPS = 8;
 int lastStepTick = -1;
 int stepIndex = 0;
 int currentPattern = 0;
+
+// CV/Gate B - Divisions based gate
+bool isCvGateB = false;
+
+struct Division
+{
+  const char *label;
+  int ticks;
+};
+
+const Division DIVISIONS[] = {
+    {"1/16", 6},
+    {"1/8", 12},
+    {"1/4", 24},
+    {"3/8", 12 * 3},
+    {"2/4", 24 * 2},
+    {"1Bar", 96},
+    {"2Bars", 96 * 2},
+    {"3Bars", 96 * 3},
+    {"4Bars", 96 * 4}};
+const int NUM_DIVISIONS = sizeof(DIVISIONS) / sizeof(DIVISIONS[0]);
+int currentDivision = 0;
+int currentDivisionIndex = 0;
 
 // OLED
 SSD1306Wire display(0x3c, SDA, SCL);
@@ -241,10 +243,15 @@ void updateDisplay()
   }
 }
 
+void setGate(uint8_t pin, uint8_t state) {
+  uint8_t out = state == HIGH ? LOW : HIGH; // Active LOW
+  digitalWrite(pin, out);
+}
+
 void updateCvGateA()
 {
-  // CV/Gaate A - Pattern based gate
-  int currentStepTick = clockTickCount / 12; // 8th note step
+  // CV/Gate A - Pattern based gate
+  int currentStepTick = clockTickCount / 12; // = 1/8 note tick
   if (currentStepTick != lastStepTick)
   {
     lastStepTick = currentStepTick;
@@ -253,11 +260,10 @@ void updateCvGateA()
     {
       int stepIndex = currentStepTick % PATTERN_STEPS;
       int gateVal = patterns[currentPattern][stepIndex];
-      Serial.print(gateVal ? 'o' : 'x');
 
       if (gateVal)
       {
-        digitalWrite(PIN_CV_GATE_A, HIGH);
+        setGate(PIN_CV_GATE_A, HIGH);
         gateStartTime = millis();
         isCvGateA = true;
       }
@@ -266,7 +272,7 @@ void updateCvGateA()
     {
       if (random(10) == 0)
       {
-        digitalWrite(PIN_CV_GATE_A, HIGH);
+        setGate(PIN_CV_GATE_A, HIGH);
         gateStartTime = millis();
         isCvGateA = true;
       }
@@ -274,11 +280,11 @@ void updateCvGateA()
   }
   if (isCvGateA && millis() - gateStartTime >= gateLengthMs)
   {
-    digitalWrite(PIN_CV_GATE_A, LOW);
-    Serial.println("Gate OFF");
-    Serial.print("Gate Length: ");
-    Serial.print(gateLengthMs);
-    Serial.println(" ms");
+    setGate(PIN_CV_GATE_A, LOW);
+    // Serial.println("Gate OFF");
+    // Serial.print("Gate Length: ");
+    // Serial.print(gateLengthMs);
+    // Serial.println(" ms");
     isCvGateA = false;
   }
 }
@@ -291,12 +297,12 @@ void updateCvGateB()
 
   if ((clockTickCount % divisionTicks) < halfCycle)
   {
-    digitalWrite(PIN_CV_GATE_B, HIGH);
+    setGate(PIN_CV_GATE_B, HIGH);
     isCvGateB = true;
   }
   else
   {
-    digitalWrite(PIN_CV_GATE_B, LOW);
+    setGate(PIN_CV_GATE_B, LOW);
     isCvGateB = false;
   }
 }
@@ -315,6 +321,7 @@ void updateStartButton()
     isPlaying = !isPlaying;
     if (isPlaying)
     {
+      midiA.sendControlChange(54, quantizes[currentQuantize].value, MIDI_CH);
       midiA.sendRealTime(midi::Start);
       lastClockMicros = micros();
       clockTickCount = 0;
@@ -327,10 +334,10 @@ void updateStartButton()
       Serial.println("MIDI Stop");
 
       // CV/Gate off
-      digitalWrite(PIN_CV_GATE_A, LOW);
+      setGate(PIN_CV_GATE_A, LOW);
       isCvGateA = false;
 
-      digitalWrite(PIN_CV_GATE_B, LOW);
+      setGate(PIN_CV_GATE_B, LOW);
       isCvGateB = false;
     }
     stateChanged = true;
@@ -454,7 +461,6 @@ void updateBpmLed()
     isBreathing = false;
     if (clockTickCount % 24 == 0)
     {
-      Serial.print("led update");
       ledBpm.On();
     }
     else
@@ -486,6 +492,9 @@ void setup()
 
   pinMode(PIN_CV_GATE_A, OUTPUT);
   pinMode(PIN_CV_GATE_B, OUTPUT);
+  
+  setGate(PIN_CV_GATE_A, LOW);
+  setGate(PIN_CV_GATE_B, LOW);
 
   pinMode(PIN_POT_A, ANALOG);
   pinMode(PIN_POT_B, ANALOG);
