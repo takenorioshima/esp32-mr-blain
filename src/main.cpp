@@ -59,15 +59,16 @@ unsigned long lastClockMicros = 0;
 int clockTickCount = 0;
 
 // Quantize
-struct Quantize {
+struct Quantize
+{
   const char *label;
   uint8_t value;
 };
 Quantize quantizes[] = {
-  // Ref: https://blooper.chasebliss.com/midi/docs/midi-manual.pdf
-  {"4/4", 0},  // CC#54 value=0 = Whole 
-  {"1/4", 3},  // CC#54 value=3 = Qurter Note
-  {"1/8", 4},  // CC#54 value=3 = Eighth Note
+    // Ref: https://blooper.chasebliss.com/midi/docs/midi-manual.pdf
+    {"4/4", 0}, // CC#54 value=0 = Whole
+    {"1/4", 3}, // CC#54 value=3 = Qurter Note
+    {"1/8", 4}, // CC#54 value=3 = Eighth Note
 };
 const int NUM_QUANTIZES = sizeof(quantizes) / sizeof(quantizes[0]);
 int currentQuantize = 0;
@@ -143,7 +144,7 @@ enum MetronomePosition
 };
 MetronomePosition metronomePosition = CENTER;
 unsigned int metronomePhase = 0;
-unsigned int lastMetronomePhase =-1;
+unsigned int lastMetronomePhase = -1;
 
 void drawDownbeatCircle()
 {
@@ -263,14 +264,16 @@ void drawDisplay()
 void updateDisplay()
 {
   unsigned long now = millis();
-  if( now - oledLastUpdatedAt < oledUpdateInterval){
+  if (now - oledLastUpdatedAt < oledUpdateInterval)
+  {
     return;
   }
   drawDisplay();
   oledLastUpdatedAt = now;
 }
 
-void setGate(uint8_t pin, uint8_t state) {
+void setGate(uint8_t pin, uint8_t state)
+{
   uint8_t out = state == HIGH ? LOW : HIGH; // Active LOW
   digitalWrite(pin, out);
 }
@@ -308,10 +311,6 @@ void updateCvGateA()
   if (isCvGateA && millis() - gateStartTime >= gateLengthMs)
   {
     setGate(PIN_CV_GATE_A, LOW);
-    // Serial.println("Gate OFF");
-    // Serial.print("Gate Length: ");
-    // Serial.print(gateLengthMs);
-    // Serial.println(" ms");
     isCvGateA = false;
   }
 }
@@ -340,7 +339,7 @@ void updateStartButton()
   if (startButton.wasPressed())
   {
     Serial.println("Pressed");
-    
+
     isPlaying = !isPlaying;
     if (isPlaying)
     {
@@ -387,7 +386,7 @@ void updateEncoderButton()
 {
   encoderButton.read();
   if (encoderButton.wasPressed())
-  { 
+  {
     currentQuantize++;
     if (currentQuantize >= NUM_QUANTIZES)
     {
@@ -467,7 +466,8 @@ void updateMetronome()
 {
   // Update metronome position
   metronomePhase = ((clockTickCount % (MIDI_PPQN * 2)) / 12);
-  if(metronomePhase == lastMetronomePhase) {
+  if (metronomePhase == lastMetronomePhase)
+  {
     return;
   }
 
@@ -529,7 +529,7 @@ void setup()
 
   pinMode(PIN_CV_GATE_A, OUTPUT);
   pinMode(PIN_CV_GATE_B, OUTPUT);
-  
+
   setGate(PIN_CV_GATE_A, LOW);
   setGate(PIN_CV_GATE_B, LOW);
 
