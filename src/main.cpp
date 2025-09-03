@@ -13,10 +13,10 @@ const byte PIN_ENCODER_S2 = 19;
 const byte PIN_ENCODER_BUTTON = 26;
 const byte PIN_PROGRAM_BUTTON = 25;
 
-const byte PIN_CV_GATE_A = 32;
-const byte PIN_CV_GATE_B = 33;
-const byte PIN_POT_A = 34;
-const byte PIN_POT_B = 35;
+const byte PIN_CV_GATE_A = 33;
+const byte PIN_CV_GATE_B = 32;
+const byte PIN_POT_A = 35;
+const byte PIN_POT_B = 34;
 
 JLed ledBpm = JLed(PIN_LED_BPM);
 bool isBreathing = true;
