@@ -15,7 +15,8 @@ const byte PIN_PROGRAM_BUTTON = 25;
 
 const byte PIN_CV_GATE_A = 33;
 const byte PIN_CV_GATE_B = 32;
-const byte PIN_POT_A = 35;
+// const byte PIN_POT_A = 35; // ←コメントアウト
+const byte PIN_POT_DELAY = 35; // ←ディレイ調整用に転用
 const byte PIN_POT_B = 34;
 
 JLed ledBpm = JLed(PIN_LED_BPM);
@@ -92,6 +93,7 @@ void sendMidiClock()
 // CV/Gate A - Pattern based gate
 unsigned long gateLengthMs = 0;
 unsigned long gateStartTime = 0;
+unsigned long gateDelayMs = 40;
 bool isCvGateA = false;
 
 const byte patterns[][8] = {
@@ -207,6 +209,7 @@ void displayCvGateStatus()
   display.setFont(ArialMT_Plain_10);
   display.setTextAlignment(TEXT_ALIGN_LEFT);
   String cvGateAText = "CV A";
+  
   if (currentPattern > 0)
   {
     if (currentPattern < NUM_PATTERNS)
@@ -218,6 +221,9 @@ void displayCvGateStatus()
       cvGateAText += "(RND)";
     }
   }
+  
+  cvGateAText = cvGateAText += "(" + String(gateDelayMs) + "ms)";
+
   display.drawString(8, 54, cvGateAText);
 
   // CV/Gate B
@@ -287,31 +293,32 @@ void updateCvGateA()
   if (currentStepTick != lastStepTick)
   {
     lastStepTick = currentStepTick;
+    bool shouldTrigger = false;
 
     if (currentPattern < NUM_PATTERNS)
     {
       int stepIndex = currentStepTick % PATTERN_STEPS;
-      int gateVal = patterns[currentPattern][stepIndex];
-
-      if (gateVal)
-      {
-        setGate(PIN_CV_GATE_A, HIGH);
-        gateStartTime = millis();
-        isCvGateA = true;
-      }
+      shouldTrigger = patterns[currentPattern][stepIndex];
     }
     else
-    {
-      if (random(10) == 0)
-      {
-        setGate(PIN_CV_GATE_A, HIGH);
-        gateStartTime = millis();
-        isCvGateA = true;
-      }
+    { // Random pattern
+      shouldTrigger = (random(10) == 0);
+    }
+    if (shouldTrigger) {
+      // Instead of immediately firing, schedule it
+      gateStartTime = millis() + gateDelayMs;
+      isCvGateA = false;
     }
   }
-  if (isCvGateA && millis() - gateStartTime >= gateLengthMs)
-  {
+  // When scheduled time has arrived, set gate HIGH
+  if (millis() >= gateStartTime && !isCvGateA) {
+    setGate(PIN_CV_GATE_A, HIGH);
+    isCvGateA = true;
+  }
+
+
+  // Turn off after gate length
+  if (isCvGateA && millis() - gateStartTime >= gateLengthMs) {
     setGate(PIN_CV_GATE_A, LOW);
     isCvGateA = false;
   }
@@ -405,8 +412,11 @@ void updateCvGatePots()
   if (millis() - lastAnalogReadMs >= analogReadInterval)
   {
     // Read pot A - Set CV/Gate pattern
-    potAValue = analogRead(PIN_POT_A);
-    currentPattern = map(potAValue, 0, 4095, 0, NUM_PATTERNS);
+    // potAValue = analogRead(PIN_POT_A);
+    // currentPattern = map(potAValue, 0, 4095, 0, NUM_PATTERNS);
+
+    int potDelay = analogRead(PIN_POT_DELAY);
+    gateDelayMs = map(potDelay, 0, 4095, 0, 100);
 
     // Read pot B - Set divisions
     potBValue = analogRead(PIN_POT_B);
@@ -535,7 +545,8 @@ void setup()
   setGate(PIN_CV_GATE_A, LOW);
   setGate(PIN_CV_GATE_B, LOW);
 
-  pinMode(PIN_POT_A, ANALOG);
+  // pinMode(PIN_POT_A, ANALOG);
+  pinMode(PIN_POT_DELAY, ANALOG); // ←ディレイ調整用に転用
   pinMode(PIN_POT_B, ANALOG);
   analogSetAttenuation(ADC_11db);
 
