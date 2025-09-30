@@ -15,9 +15,8 @@ const byte PIN_PROGRAM_BUTTON = 25;
 
 const byte PIN_CV_GATE_A = 33;
 const byte PIN_CV_GATE_B = 32;
-// const byte PIN_POT_A = 35; // ←コメントアウト
-const byte PIN_POT_DELAY = 35; // ←ディレイ調整用に転用
-const byte PIN_POT_B = 34;
+const byte PIN_POT_DELAY = 35;
+const byte PIN_POT_A = 34;
 
 JLed ledBpm = JLed(PIN_LED_BPM);
 bool isBreathing = true;
@@ -222,7 +221,7 @@ void displayCvGateStatus()
     }
   }
   
-  cvGateAText = cvGateAText += "(" + String(gateDelayMs) + "ms)";
+  cvGateAText = cvGateAText += " + " + String(gateDelayMs) + " ms";
 
   display.drawString(8, 54, cvGateAText);
 
@@ -233,7 +232,7 @@ void displayCvGateStatus()
   }
   display.setTextAlignment(TEXT_ALIGN_RIGHT);
   String cvGateBText = "CV B";
-  cvGateBText += " (" + String(DIVISIONS[currentDivisionIndex].label) + ")";
+  // cvGateBText += " (" + String(DIVISIONS[currentDivisionIndex].label) + ")";
   display.drawString(121, 54, cvGateBText);
 }
 
@@ -412,15 +411,15 @@ void updateCvGatePots()
   if (millis() - lastAnalogReadMs >= analogReadInterval)
   {
     // Read pot A - Set CV/Gate pattern
-    // potAValue = analogRead(PIN_POT_A);
-    // currentPattern = map(potAValue, 0, 4095, 0, NUM_PATTERNS);
+    potAValue = analogRead(PIN_POT_A);
+    currentPattern = map(potAValue, 0, 4095, 0, NUM_PATTERNS);
 
     int potDelay = analogRead(PIN_POT_DELAY);
     gateDelayMs = map(potDelay, 0, 4095, 0, 100);
 
     // Read pot B - Set divisions
-    potBValue = analogRead(PIN_POT_B);
-    currentDivisionIndex = map(potBValue, 0, 4095, 0, NUM_DIVISIONS - 1);
+    // potBValue = analogRead(PIN_POT_B);
+    // currentDivisionIndex = map(potBValue, 0, 4095, 0, NUM_DIVISIONS - 1);
     currentDivision = DIVISIONS[currentDivisionIndex].ticks;
 
     lastAnalogReadMs = millis();
@@ -546,13 +545,13 @@ void setup()
   setGate(PIN_CV_GATE_B, LOW);
 
   // pinMode(PIN_POT_A, ANALOG);
-  pinMode(PIN_POT_DELAY, ANALOG); // ←ディレイ調整用に転用
-  pinMode(PIN_POT_B, ANALOG);
+  pinMode(PIN_POT_DELAY, ANALOG);
+  pinMode(PIN_POT_A, ANALOG);
   analogSetAttenuation(ADC_11db);
 
   gateLengthMs = 60000 / (bpm * 4); // 16th note length in ms
 
-  currentDivisionIndex = 1; // Start with 1/8 note
+  currentDivisionIndex = 0; // Start with 1/16 note
 
   ledBpm.Breathe(3000).DelayAfter(1000).Forever();
 
